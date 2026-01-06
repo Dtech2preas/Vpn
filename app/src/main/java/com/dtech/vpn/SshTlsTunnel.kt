@@ -18,8 +18,11 @@ class SshTlsTunnel(
     private val host: String,
     private val port: Int,
     private val sni: String,
+    private val payload: String,
     private val user: String,
-    private val pass: String
+    private val pass: String,
+    private val forceTls12: Boolean,
+    private val logger: (String) -> Unit
 ) {
 
     private var session: Session? = null
@@ -57,6 +60,8 @@ class SshTlsTunnel(
     }
 
     private fun createTlsSocket(): Socket {
+        logger("Creating socket to $host:$port")
+
         // Trust All Certs (Security Risk, but standard for these 'free internet' tools)
         val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
             override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
@@ -64,14 +69,21 @@ class SshTlsTunnel(
             override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
         })
 
-        val sslContext = SSLContext.getInstance("TLS")
+        val protocol = if (forceTls12) "TLSv1.2" else "TLS"
+        logger("Initializing SSL Context with $protocol...")
+        val sslContext = SSLContext.getInstance(protocol)
         sslContext.init(null, trustAllCerts, java.security.SecureRandom())
         val factory = sslContext.socketFactory
 
         // 1. Establish plain TCP connection first
         // This ensures DNS resolution happens here and connection is established
         val plainSocket = Socket()
-        plainSocket.connect(InetSocketAddress(host, port), 30000)
+        try {
+            plainSocket.connect(InetSocketAddress(host, port), 30000)
+        } catch (e: Exception) {
+             logger("TCP Connection failed: ${e.message}")
+             throw e
+        }
 
         // 2. Determine the Host to use for SNI and Verification
         // If user provided SNI, use it. Otherwise use the connection host.
@@ -95,9 +107,70 @@ class SshTlsTunnel(
             }
         }
 
+        if (forceTls12) {
+             socket.enabledProtocols = arrayOf("TLSv1.2")
+        }
+
+        logger("Starting TLS Handshake with SNI: $peerHost")
         socket.startHandshake()
         sslSocket = socket
+        logger("TLS Handshake successful!")
+
+        // 5. Send Payload (if any)
+        if (payload.isNotEmpty()) {
+             logger("Sending Payload...")
+             val out = socket.outputStream
+             val processedPayload = payload.replace("[crlf]", "\r\n")
+                                           .replace("[lf]", "\n")
+                                           .replace("[cr]", "\r")
+
+             // Ensure it ends with a double CRLF if it looks like an HTTP request
+             val finalPayload = if (!processedPayload.endsWith("\r\n\r\n")) {
+                 "$processedPayload\r\n\r\n"
+             } else {
+                 processedPayload
+             }
+
+             out.write(finalPayload.toByteArray())
+             out.flush()
+             logger("Payload sent!")
+
+             // Note: If the payload is a WebSocket Upgrade, the server will send an HTTP 101 response.
+             // JSch expects the SSH version string (SSH-2.0-...) immediately.
+             // We need to consume the HTTP headers until the empty line before handing off to JSch.
+             // However, JSch is strict. If it sees "HTTP/1.1 101...", it might fail or it might tolerate it if it finds "SSH-" later.
+             // Standard practice in these tools is to strip the HTTP response.
+             consumeHttpResponse(socket.inputStream)
+        }
+
         return socket
+    }
+
+    private fun consumeHttpResponse(input: InputStream) {
+        // Simple state machine to read until \r\n\r\n
+        // This is a naive implementation but sufficient for this context.
+        logger("Reading HTTP Response...")
+        val buffer = StringBuilder()
+        var lastFour = 0 // integer representing last 4 bytes as a rolling hash or simple check
+
+        // We read byte by byte to avoid over-reading into the SSH stream
+        var b: Int
+        var count = 0
+        while (count < 4096) { // Safety limit 4kb header
+            b = input.read()
+            if (b == -1) break
+            buffer.append(b.toChar())
+
+            // Check for \r\n\r\n (13, 10, 13, 10)
+            // A simple way is to check the end of the StringBuilder
+            if (buffer.endsWith("\r\n\r\n")) {
+                logger("HTTP Response Header received (Length: ${buffer.length})")
+                // logger("Header: $buffer") // Debug only
+                return
+            }
+            count++
+        }
+        logger("Warning: HTTP Response header too large or not found. Passing stream to JSch anyway.")
     }
 
     fun isConnected(): Boolean {

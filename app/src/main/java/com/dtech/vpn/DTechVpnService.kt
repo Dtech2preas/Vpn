@@ -19,8 +19,10 @@ class DTechVpnService : VpnService() {
         const val EXTRA_HOST = "host"
         const val EXTRA_PORT = "port"
         const val EXTRA_SNI = "sni"
+        const val EXTRA_PAYLOAD = "payload"
         const val EXTRA_USERNAME = "username"
         const val EXTRA_PASSWORD = "password"
+        const val EXTRA_FORCE_TLS_12 = "force_tls12"
 
         const val BROADCAST_LOG = "com.dtech.vpn.LOG"
         const val BROADCAST_STATUS = "com.dtech.vpn.STATUS"
@@ -47,11 +49,13 @@ class DTechVpnService : VpnService() {
             val host = intent.getStringExtra(EXTRA_HOST) ?: ""
             val port = intent.getIntExtra(EXTRA_PORT, 22)
             val sni = intent.getStringExtra(EXTRA_SNI) ?: ""
+            val payload = intent.getStringExtra(EXTRA_PAYLOAD) ?: ""
             val user = intent.getStringExtra(EXTRA_USERNAME) ?: ""
             val pass = intent.getStringExtra(EXTRA_PASSWORD) ?: ""
+            val forceTls12 = intent.getBooleanExtra(EXTRA_FORCE_TLS_12, false)
 
             if (!isRunning.get()) {
-                startVpn(host, port, sni, user, pass)
+                startVpn(host, port, sni, payload, user, pass, forceTls12)
             }
             return START_STICKY
         }
@@ -59,14 +63,18 @@ class DTechVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
-    private fun startVpn(host: String, port: Int, sni: String, user: String, pass: String) {
-        log("Starting SSH/TLS connection to $host:$port via SNI: $sni")
+    private fun startVpn(host: String, port: Int, sni: String, payload: String, user: String, pass: String, forceTls12: Boolean) {
+        log("Starting VPN connection to $host:$port")
+        if (sni.isNotEmpty()) log("SNI: $sni")
+        if (payload.isNotEmpty()) log("Payload: [Hidden for brevity]")
+        log("Force TLS 1.2: $forceTls12")
+
         updateStatus(STATUS_CONNECTING)
         isRunning.set(true)
 
         vpnThread = Thread {
             try {
-                runVpnLoop(host, port, sni, user, pass)
+                runVpnLoop(host, port, sni, payload, user, pass, forceTls12)
             } catch (e: Exception) {
                 log("Error in VPN loop: ${e.message}")
                 e.printStackTrace()
@@ -90,11 +98,14 @@ class DTechVpnService : VpnService() {
         stopSelf()
     }
 
-    private fun runVpnLoop(host: String, port: Int, sni: String, user: String, pass: String) {
+    private fun runVpnLoop(host: String, port: Int, sni: String, payload: String, user: String, pass: String, forceTls12: Boolean) {
         var tunnel: SshTlsTunnel? = null
         try {
-            log("Connecting to $host...")
-            tunnel = SshTlsTunnel(host, port, sni, user, pass)
+            log("Initializing SSH Tunnel...")
+
+            // Pass the logging function to the tunnel so it can report progress back to UI
+            tunnel = SshTlsTunnel(host, port, sni, payload, user, pass, forceTls12) { msg -> log(msg) }
+
             tunnel.connect()
             log("SSH Connection established and authenticated!")
             // In a real VPN app using SSH, we would now set up:
