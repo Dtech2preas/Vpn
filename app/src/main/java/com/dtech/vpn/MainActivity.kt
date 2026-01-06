@@ -17,7 +17,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var etHost: EditText
     private lateinit var etPort: EditText
-    private lateinit var etToken: EditText
+    private lateinit var etSni: EditText
+    private lateinit var etUsername: EditText
+    private lateinit var etPassword: EditText
     private lateinit var btnConnect: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvLogs: TextView
@@ -43,7 +45,9 @@ class MainActivity : AppCompatActivity() {
 
         etHost = findViewById(R.id.etHost)
         etPort = findViewById(R.id.etPort)
-        etToken = findViewById(R.id.etToken)
+        etSni = findViewById(R.id.etSni)
+        etUsername = findViewById(R.id.etUsername)
+        etPassword = findViewById(R.id.etPassword)
         btnConnect = findViewById(R.id.btnConnect)
         tvStatus = findViewById(R.id.tvStatus)
         tvLogs = findViewById(R.id.tvLogs)
@@ -62,14 +66,8 @@ class MainActivity : AppCompatActivity() {
         val filter = IntentFilter()
         filter.addAction(DTechVpnService.BROADCAST_LOG)
         filter.addAction(DTechVpnService.BROADCAST_STATUS)
-        // Register receiver with the appropriate flag for Android 14+ if needed,
-        // though regular registerReceiver is fine for standard broadcast.
-        // Starting Android 14 (API 34), context-registered receivers need flags.
-        // However, we are targeting API 34, so we should be careful.
-        // But since we are receiving our own broadcast, default is fine usually,
-        // or we use Context.RECEIVER_EXPORTED / RECEIVER_NOT_EXPORTED.
 
-        if (android.os.Build.VERSION.SDK_INT >= 33) { // Android 13+
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
              registerReceiver(logReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
              registerReceiver(logReceiver, filter)
@@ -94,7 +92,6 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, DTechVpnService::class.java)
         intent.action = DTechVpnService.ACTION_DISCONNECT
         startService(intent)
-        // UI will update via broadcast
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -102,24 +99,28 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == VPN_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             val host = etHost.text.toString().trim()
             val portStr = etPort.text.toString().trim()
-            val token = etToken.text.toString().trim()
+            val sni = etSni.text.toString().trim()
+            val username = etUsername.text.toString().trim()
+            val password = etPassword.text.toString().trim()
 
-            if (host.isEmpty() || portStr.isEmpty()) {
-                Toast.makeText(this, "Host and Port are required", Toast.LENGTH_SHORT).show()
+            if (host.isEmpty() || portStr.isEmpty() || username.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show()
                 return
             }
 
             val port = try {
                 portStr.toInt()
             } catch (e: NumberFormatException) {
-                443
+                22
             }
 
             val intent = Intent(this, DTechVpnService::class.java)
             intent.action = DTechVpnService.ACTION_CONNECT
             intent.putExtra(DTechVpnService.EXTRA_HOST, host)
             intent.putExtra(DTechVpnService.EXTRA_PORT, port)
-            intent.putExtra(DTechVpnService.EXTRA_TOKEN, token)
+            intent.putExtra(DTechVpnService.EXTRA_SNI, sni)
+            intent.putExtra(DTechVpnService.EXTRA_USERNAME, username)
+            intent.putExtra(DTechVpnService.EXTRA_PASSWORD, password)
             startService(intent)
         }
     }
@@ -128,7 +129,6 @@ class MainActivity : AppCompatActivity() {
         message?.let {
             val currentText = tvLogs.text.toString()
             val newText = "$it\n$currentText"
-            // Keep log size manageable
             if (newText.length > 5000) {
                 tvLogs.text = newText.substring(0, 5000)
             } else {
@@ -145,7 +145,7 @@ class MainActivity : AppCompatActivity() {
                 btnConnect.text = getString(R.string.disconnect)
             }
             DTechVpnService.STATUS_CONNECTING -> {
-                isVpnConnected = false // Intermediate state
+                isVpnConnected = false
                 tvStatus.text = getString(R.string.status_connecting)
                 btnConnect.text = "..."
                 btnConnect.isEnabled = false
