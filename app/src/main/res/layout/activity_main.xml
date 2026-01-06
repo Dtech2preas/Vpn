@@ -9,7 +9,7 @@
         android:id="@+id/etHost"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/host_hint"
+        android:hint="SSH Server IP"
         android:inputType="textUri"
         android:text="10.0.2.2" />
 
@@ -17,16 +17,31 @@
         android:id="@+id/etPort"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/port_hint"
+        android:hint="SSH Port"
         android:inputType="number"
-        android:text="443" />
+        android:text="22" />
 
     <EditText
-        android:id="@+id/etToken"
+        android:id="@+id/etSni"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="@string/token_hint"
+        android:hint="SNI Host (Zero Rate Site)"
+        android:inputType="textUri"
+        android:text="example.com" />
+
+    <EditText
+        android:id="@+id/etUsername"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Username"
         android:inputType="text" />
+
+    <EditText
+        android:id="@+id/etPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Password"
+        android:inputType="textPassword" />
 
     <Button
         android:id="@+id/btnConnect"
