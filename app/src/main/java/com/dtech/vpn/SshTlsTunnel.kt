@@ -5,6 +5,7 @@ import com.jcraft.jsch.Session
 import com.jcraft.jsch.SocketFactory
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
@@ -67,16 +68,30 @@ class SshTlsTunnel(
         sslContext.init(null, trustAllCerts, java.security.SecureRandom())
         val factory = sslContext.socketFactory
 
-        val socket = factory.createSocket(host, port) as SSLSocket
+        // 1. Establish plain TCP connection first
+        // This ensures DNS resolution happens here and connection is established
+        val plainSocket = Socket()
+        plainSocket.connect(InetSocketAddress(host, port), 30000)
 
-        // Set SNI
+        // 2. Determine the Host to use for SNI and Verification
+        // If user provided SNI, use it. Otherwise use the connection host.
+        val peerHost = if (sni.isNotEmpty()) sni else host
+
+        // 3. Layer the SSL Socket
+        // autoClose=true: Closing the SSL socket will close the underlying plain socket
+        val socket = factory.createSocket(plainSocket, peerHost, port, true) as SSLSocket
+
+        // 4. Double check SNI setting via SSLParameters
+        // The peerHost arg above usually sets the SNI automatically, but we can enforce it.
         if (sni.isNotEmpty()) {
-            val params = socket.sslParameters
-            // Reflection or API check not strictly needed since minSdk=24
-            // But we need to use SNIHostName
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                params.serverNames = listOf(javax.net.ssl.SNIHostName(sni))
-                socket.sslParameters = params
+             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                val params = socket.sslParameters
+                // Only set if not already set (though overriding is fine)
+                 val currentSni = params.serverNames
+                 if (currentSni == null || currentSni.isEmpty()) {
+                     params.serverNames = listOf(javax.net.ssl.SNIHostName(sni))
+                     socket.sslParameters = params
+                 }
             }
         }
 
@@ -97,7 +112,4 @@ class SshTlsTunnel(
             sslSocket?.close()
         } catch (e: Exception) {}
     }
-
-    // Future extension: Port forwarding methods
-    // fun setPortForwardingL(localPort: Int, remoteHost: String, remotePort: Int) ...
 }
