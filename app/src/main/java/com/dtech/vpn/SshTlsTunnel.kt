@@ -199,6 +199,10 @@ class SshTlsTunnel(
         return session?.isConnected == true
     }
 
+    fun getSession(): Session? {
+        return session
+    }
+
     fun close() {
         try {
             session?.disconnect()
