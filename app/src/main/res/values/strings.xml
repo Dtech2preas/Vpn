@@ -5,6 +5,7 @@
     <string name="token_hint">Token</string>
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
+    <string name="cancel">Cancel</string>
     <string name="status_disconnected">Status: Disconnected</string>
     <string name="status_connected">Status: Connected</string>
     <string name="status_connecting">Status: Connecting...</string>

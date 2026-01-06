@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import com.dtech.vpn.net.Tun2Socks
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
@@ -94,10 +95,7 @@ class DTechVpnService : VpnService() {
 
                 try {
                     runVpnLoop(host, port, sni, payload, enableCamouflage, user, pass, forceTls12)
-                    connected = true // If runVpnLoop returns normally, it usually means clean exit or connected loop finished?
-                    // Wait, runVpnLoop contains the while(connected) loop.
-                    // If it throws exception, we catch it here.
-                    // If it returns, it means the connection closed.
+                    connected = true
                 } catch (e: Exception) {
                     log("Connection failed: ${e.message}")
                     e.printStackTrace()
@@ -135,11 +133,6 @@ class DTechVpnService : VpnService() {
 
             tunnel.connect()
             log("SSH Connection established and authenticated!")
-            // In a real VPN app using SSH, we would now set up:
-            // 1. Dynamic Port Forwarding (SOCKS)
-            // 2. A local Tun2Socks stack to route IP packets into SOCKS
-            // Since we are restricted to pure Kotlin and no heavy 3rd party TCP stack,
-            // we will proceed to establish the TUN interface so the phone shows "VPN Connected".
         } catch (e: Exception) {
             log("Failed to connect: ${e.message}")
             // Throw to trigger retry logic
@@ -153,6 +146,7 @@ class DTechVpnService : VpnService() {
         builder.addAddress("10.0.0.2", 24)
         builder.addRoute("0.0.0.0", 0)
         builder.addDnsServer("8.8.8.8")
+        builder.setMtu(1500)
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             builder.setMetered(false)
@@ -175,33 +169,32 @@ class DTechVpnService : VpnService() {
         }
 
         val vpnInput = FileInputStream(vpnFd)
-        // val vpnOutput = FileOutputStream(vpnFd)
+        val vpnOutput = FileOutputStream(vpnFd)
 
-        // Buffers
-        val bufferSize = 32767
-        val packet = ByteBuffer.allocate(bufferSize)
+        // Initialize Tun2Socks
+        val tun2Socks = Tun2Socks(tunnel.getSession()!!, vpnOutput) { msg -> log(msg) }
+        log("Tun2Socks Initialized")
 
         // 3. Forwarding Loop
-        // NOTE: Since we don't have a Tun2Socks implementation (Heavy Logic),
-        // we just keep the loop running to maintain the connection.
-        // Incoming packets from TUN are read and discarded/logged.
-        // This validates the connection logic requested by the user.
-
         try {
-            val buf = ByteArray(bufferSize)
+            val buf = ByteArray(16384)
+            val buffer = ByteBuffer.wrap(buf)
 
             while (isRunning.get() && tunnel.isConnected()) {
                 // Read from TUN (Blocking)
                 val read = vpnInput.read(buf)
                 if (read > 0) {
-                    // Packet captured.
-                    // To make this functional for internet, we would need:
-                    // Tun2Socks.process(buf, read, sshSocksStream)
+                    buffer.position(0)
+                    buffer.limit(read)
+                    tun2Socks.processPacket(buffer, read)
                 }
             }
         } catch (e: IOException) {
-            log("TUN reader error: ${e.message}")
+            if (isRunning.get()) {
+                log("TUN reader error: ${e.message}")
+            }
         } finally {
+            log("VPN Loop Finished")
             try {
                 tunnel.close()
             } catch (e: Exception) {}

@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
 
     private val VPN_REQUEST_CODE = 100
     private var isVpnConnected = false
+    private var isVpnConnecting = false
 
     private val logReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -81,10 +82,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnConnect.setOnClickListener {
-            if (!isVpnConnected) {
-                startVpn()
-            } else {
+            if (isVpnConnected || isVpnConnecting) {
+                // If Connected OR Connecting, clicking button means "Stop/Cancel"
                 stopVpn()
+            } else {
+                startVpn()
             }
         }
 
@@ -131,6 +133,8 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, DTechVpnService::class.java)
         intent.action = DTechVpnService.ACTION_DISCONNECT
         startService(intent)
+        // Also update UI immediately to responsive feel
+        updateStatusUI(DTechVpnService.STATUS_DISCONNECTED)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -192,17 +196,21 @@ class MainActivity : AppCompatActivity() {
         when (status) {
             DTechVpnService.STATUS_CONNECTED -> {
                 isVpnConnected = true
+                isVpnConnecting = false
                 tvStatus.text = getString(R.string.status_connected)
                 btnConnect.text = getString(R.string.disconnect)
+                btnConnect.isEnabled = true
             }
             DTechVpnService.STATUS_CONNECTING -> {
                 isVpnConnected = false
+                isVpnConnecting = true
                 tvStatus.text = getString(R.string.status_connecting)
-                btnConnect.text = "..."
-                btnConnect.isEnabled = false
+                btnConnect.text = getString(R.string.cancel) // Change to Cancel
+                btnConnect.isEnabled = true // Enable it so user can cancel
             }
             DTechVpnService.STATUS_DISCONNECTED -> {
                 isVpnConnected = false
+                isVpnConnecting = false
                 tvStatus.text = getString(R.string.status_disconnected)
                 btnConnect.text = getString(R.string.connect)
                 btnConnect.isEnabled = true
