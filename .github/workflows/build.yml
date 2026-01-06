@@ -2,9 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "dtech-vpn-init-10671235161900549711" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main", "dtech-vpn-init-10671235161900549711" ]
 
 jobs:
   build:
