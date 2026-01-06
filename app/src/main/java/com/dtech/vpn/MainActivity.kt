@@ -22,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etPort: EditText
     private lateinit var etSni: EditText
     private lateinit var etPayload: EditText
+    private lateinit var btnGeneratePayload: Button
     private lateinit var etUsername: EditText
     private lateinit var etPassword: EditText
     private lateinit var cbForceTls12: CheckBox
@@ -54,6 +55,7 @@ class MainActivity : AppCompatActivity() {
         etPort = findViewById(R.id.etPort)
         etSni = findViewById(R.id.etSni)
         etPayload = findViewById(R.id.etPayload)
+        btnGeneratePayload = findViewById(R.id.btnGeneratePayload)
         etUsername = findViewById(R.id.etUsername)
         etPassword = findViewById(R.id.etPassword)
         cbForceTls12 = findViewById(R.id.cbForceTls12)
@@ -62,6 +64,11 @@ class MainActivity : AppCompatActivity() {
         btnClearLogs = findViewById(R.id.btnClearLogs)
         tvStatus = findViewById(R.id.tvStatus)
         tvLogs = findViewById(R.id.tvLogs)
+
+        btnGeneratePayload.setOnClickListener {
+            val payloadTemplate = "GET / HTTP/1.1[crlf]Host: [host][crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+            etPayload.setText(payloadTemplate)
+        }
 
         btnConnect.setOnClickListener {
             if (!isVpnConnected) {
