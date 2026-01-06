@@ -2,12 +2,15 @@ package com.dtech.vpn
 
 import android.app.Activity
 import android.content.BroadcastReceiver
+import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Bundle
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
@@ -18,9 +21,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etHost: EditText
     private lateinit var etPort: EditText
     private lateinit var etSni: EditText
+    private lateinit var etPayload: EditText
     private lateinit var etUsername: EditText
     private lateinit var etPassword: EditText
+    private lateinit var cbForceTls12: CheckBox
     private lateinit var btnConnect: Button
+    private lateinit var btnCopyLogs: Button
+    private lateinit var btnClearLogs: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvLogs: TextView
 
@@ -46,9 +53,13 @@ class MainActivity : AppCompatActivity() {
         etHost = findViewById(R.id.etHost)
         etPort = findViewById(R.id.etPort)
         etSni = findViewById(R.id.etSni)
+        etPayload = findViewById(R.id.etPayload)
         etUsername = findViewById(R.id.etUsername)
         etPassword = findViewById(R.id.etPassword)
+        cbForceTls12 = findViewById(R.id.cbForceTls12)
         btnConnect = findViewById(R.id.btnConnect)
+        btnCopyLogs = findViewById(R.id.btnCopyLogs)
+        btnClearLogs = findViewById(R.id.btnClearLogs)
         tvStatus = findViewById(R.id.tvStatus)
         tvLogs = findViewById(R.id.tvLogs)
 
@@ -58,6 +69,17 @@ class MainActivity : AppCompatActivity() {
             } else {
                 stopVpn()
             }
+        }
+
+        btnCopyLogs.setOnClickListener {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("VPN Logs", tvLogs.text)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
+        }
+
+        btnClearLogs.setOnClickListener {
+            tvLogs.text = "Ready..."
         }
     }
 
@@ -100,8 +122,10 @@ class MainActivity : AppCompatActivity() {
             val host = etHost.text.toString().trim()
             val portStr = etPort.text.toString().trim()
             val sni = etSni.text.toString().trim()
+            val payload = etPayload.text.toString() // No trim, spaces might be significant in payload
             val username = etUsername.text.toString().trim()
             val password = etPassword.text.toString().trim()
+            val forceTls12 = cbForceTls12.isChecked
 
             if (host.isEmpty() || portStr.isEmpty() || username.isEmpty() || password.isEmpty()) {
                 Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show()
@@ -119,8 +143,10 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra(DTechVpnService.EXTRA_HOST, host)
             intent.putExtra(DTechVpnService.EXTRA_PORT, port)
             intent.putExtra(DTechVpnService.EXTRA_SNI, sni)
+            intent.putExtra(DTechVpnService.EXTRA_PAYLOAD, payload)
             intent.putExtra(DTechVpnService.EXTRA_USERNAME, username)
             intent.putExtra(DTechVpnService.EXTRA_PASSWORD, password)
+            intent.putExtra(DTechVpnService.EXTRA_FORCE_TLS_12, forceTls12)
             startService(intent)
         }
     }

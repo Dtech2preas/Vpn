@@ -3,84 +3,175 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
-
-    <EditText
-        android:id="@+id/etHost"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="SSH Server IP"
-        android:inputType="textUri"
-        android:text="10.0.2.2" />
-
-    <EditText
-        android:id="@+id/etPort"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="SSH Port"
-        android:inputType="number"
-        android:text="22" />
-
-    <EditText
-        android:id="@+id/etSni"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="SNI Host (Zero Rate Site)"
-        android:inputType="textUri"
-        android:text="example.com" />
-
-    <EditText
-        android:id="@+id/etUsername"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Username"
-        android:inputType="text" />
-
-    <EditText
-        android:id="@+id/etPassword"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Password"
-        android:inputType="textPassword" />
-
-    <Button
-        android:id="@+id/btnConnect"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/connect"
-        android:layout_marginTop="16dp" />
+    android:padding="16dp"
+    android:background="#121212">
 
     <TextView
-        android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/status_disconnected"
+        android:text="D-Tech VPN"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
         android:textStyle="bold"
-        android:layout_marginTop="16dp"
-        android:gravity="center" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Logs:"
-        android:layout_marginTop="24dp"
-        android:textStyle="bold"/>
+        android:layout_marginBottom="16dp"/>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="8dp"
-        android:background="#EEEEEE">
+        android:layout_weight="1">
 
-        <TextView
-            android:id="@+id/tvLogs"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:text="Ready..." />
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/etHost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="SSH Server IP"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:inputType="textUri"
+                android:backgroundTint="#6200EE"
+                android:text="sa3.vpnjantit.com" />
+
+            <EditText
+                android:id="@+id/etPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="SSH Port (e.g. 443)"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:inputType="number"
+                android:backgroundTint="#6200EE"
+                android:text="443" />
+
+            <EditText
+                android:id="@+id/etSni"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="SNI Host (e.g. onlinecms.mtn.co.za)"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:inputType="textUri"
+                android:backgroundTint="#6200EE"
+                android:text="" />
+
+            <EditText
+                android:id="@+id/etPayload"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Payload (Optional)"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:inputType="textMultiLine"
+                android:minLines="2"
+                android:backgroundTint="#6200EE"
+                android:text="" />
+
+            <EditText
+                android:id="@+id/etUsername"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Username"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:backgroundTint="#6200EE"
+                android:inputType="text" />
+
+            <EditText
+                android:id="@+id/etPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Password"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:backgroundTint="#6200EE"
+                android:inputType="textPassword" />
+
+            <CheckBox
+                android:id="@+id/cbForceTls12"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Force TLS 1.2"
+                android:textColor="#FFFFFF"
+                android:buttonTint="#6200EE"
+                android:layout_marginTop="8dp"/>
+
+            <Button
+                android:id="@+id/btnConnect"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/connect"
+                android:backgroundTint="#6200EE"
+                android:textColor="#FFFFFF"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/status_disconnected"
+                android:textColor="#AAAAAA"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"
+                android:gravity="center" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="24dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Logs:"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"/>
+
+                <Button
+                    android:id="@+id/btnCopyLogs"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="Copy"
+                    android:textSize="10sp"
+                    android:backgroundTint="#444444"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginEnd="8dp"/>
+
+                <Button
+                    android:id="@+id/btnClearLogs"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:text="Clear"
+                    android:textSize="10sp"
+                    android:backgroundTint="#444444"
+                    android:textColor="#FFFFFF"/>
+
+            </LinearLayout>
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:layout_marginTop="8dp"
+                android:background="#222222">
+
+                <TextView
+                    android:id="@+id/tvLogs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:textSize="12sp"
+                    android:textColor="#00FF00"
+                    android:fontFamily="monospace"
+                    android:text="Ready..." />
+            </ScrollView>
+
+        </LinearLayout>
     </ScrollView>
 
 </LinearLayout>
