@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -26,10 +27,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etPassword: EditText
     private lateinit var cbForceTls12: CheckBox
     private lateinit var btnConnect: Button
+    private lateinit var btnGeneratePayload: Button
     private lateinit var btnCopyLogs: Button
     private lateinit var btnClearLogs: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvLogs: TextView
+    private lateinit var svLogs: ScrollView
 
     private val VPN_REQUEST_CODE = 100
     private var isVpnConnected = false
@@ -58,10 +61,12 @@ class MainActivity : AppCompatActivity() {
         etPassword = findViewById(R.id.etPassword)
         cbForceTls12 = findViewById(R.id.cbForceTls12)
         btnConnect = findViewById(R.id.btnConnect)
+        btnGeneratePayload = findViewById(R.id.btnGeneratePayload)
         btnCopyLogs = findViewById(R.id.btnCopyLogs)
         btnClearLogs = findViewById(R.id.btnClearLogs)
         tvStatus = findViewById(R.id.tvStatus)
         tvLogs = findViewById(R.id.tvLogs)
+        svLogs = findViewById(R.id.svLogs)
 
         btnConnect.setOnClickListener {
             if (!isVpnConnected) {
@@ -69,6 +74,10 @@ class MainActivity : AppCompatActivity() {
             } else {
                 stopVpn()
             }
+        }
+
+        btnGeneratePayload.setOnClickListener {
+            generatePayload()
         }
 
         btnCopyLogs.setOnClickListener {
@@ -81,6 +90,24 @@ class MainActivity : AppCompatActivity() {
         btnClearLogs.setOnClickListener {
             tvLogs.text = "Ready..."
         }
+    }
+
+    private fun generatePayload() {
+        // If SNI is present, use it for the Host header (typical for SNI spoofing/CDN tricks)
+        // Otherwise use the Server Host
+        val host = etHost.text.toString().trim()
+        val sni = etSni.text.toString().trim()
+
+        val targetHost = if (sni.isNotEmpty()) sni else host
+
+        if (targetHost.isEmpty()) {
+            Toast.makeText(this, "Please enter Host or SNI first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Standard Websocket Payload
+        val payload = "GET / HTTP/1.1[crlf]Host: $targetHost[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
+        etPayload.setText(payload)
     }
 
     override fun onResume() {
@@ -154,11 +181,16 @@ class MainActivity : AppCompatActivity() {
     private fun appendLog(message: String?) {
         message?.let {
             val currentText = tvLogs.text.toString()
-            val newText = "$it\n$currentText"
-            if (newText.length > 5000) {
-                tvLogs.text = newText.substring(0, 5000)
+            val newText = "$currentText$it\n" // Append to bottom instead of top
+            if (newText.length > 50000) { // Increased log limit
+                tvLogs.text = newText.substring(newText.length - 50000)
             } else {
                 tvLogs.text = newText
+            }
+
+            // Auto-scroll to bottom
+            svLogs.post {
+                svLogs.fullScroll(ScrollView.FOCUS_DOWN)
             }
         }
     }

@@ -15,10 +15,12 @@
         android:textStyle="bold"
         android:layout_marginBottom="16dp"/>
 
+    <!-- Input Section (Scrollable) -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -58,17 +60,35 @@
                 android:backgroundTint="#6200EE"
                 android:text="" />
 
-            <EditText
-                android:id="@+id/etPayload"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Payload (Optional)"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#AAAAAA"
-                android:inputType="textMultiLine"
-                android:minLines="2"
-                android:backgroundTint="#6200EE"
-                android:text="" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <EditText
+                    android:id="@+id/etPayload"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:hint="Payload (Optional)"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#AAAAAA"
+                    android:inputType="textMultiLine"
+                    android:minLines="2"
+                    android:backgroundTint="#6200EE"
+                    android:text="" />
+
+                <Button
+                    android:id="@+id/btnGeneratePayload"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Gen"
+                    android:textSize="10sp"
+                    android:backgroundTint="#444444"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginStart="4dp"/>
+            </LinearLayout>
 
             <EditText
                 android:id="@+id/etUsername"
@@ -118,60 +138,69 @@
                 android:layout_marginTop="16dp"
                 android:gravity="center" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginTop="24dp"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Logs:"
-                    android:textColor="#FFFFFF"
-                    android:textStyle="bold"/>
-
-                <Button
-                    android:id="@+id/btnCopyLogs"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:text="Copy"
-                    android:textSize="10sp"
-                    android:backgroundTint="#444444"
-                    android:textColor="#FFFFFF"
-                    android:layout_marginEnd="8dp"/>
-
-                <Button
-                    android:id="@+id/btnClearLogs"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:text="Clear"
-                    android:textSize="10sp"
-                    android:backgroundTint="#444444"
-                    android:textColor="#FFFFFF"/>
-
-            </LinearLayout>
-
-            <ScrollView
-                android:layout_width="match_parent"
-                android:layout_height="200dp"
-                android:layout_marginTop="8dp"
-                android:background="#222222">
-
-                <TextView
-                    android:id="@+id/tvLogs"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="8dp"
-                    android:textSize="12sp"
-                    android:textColor="#00FF00"
-                    android:fontFamily="monospace"
-                    android:text="Ready..." />
-            </ScrollView>
-
         </LinearLayout>
     </ScrollView>
+
+    <!-- Logs Section (Fixed Bottom Pane) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="250dp"
+        android:orientation="vertical"
+        android:layout_marginTop="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Logs:"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"/>
+
+            <Button
+                android:id="@+id/btnCopyLogs"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="Copy"
+                android:textSize="10sp"
+                android:backgroundTint="#444444"
+                android:textColor="#FFFFFF"
+                android:layout_marginEnd="8dp"/>
+
+            <Button
+                android:id="@+id/btnClearLogs"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="Clear"
+                android:textSize="10sp"
+                android:backgroundTint="#444444"
+                android:textColor="#FFFFFF"/>
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/svLogs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#222222"
+            android:fillViewport="true"
+            android:scrollbars="vertical">
+
+            <TextView
+                android:id="@+id/tvLogs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:textSize="12sp"
+                android:textColor="#00FF00"
+                android:fontFamily="monospace"
+                android:text="Ready..." />
+        </ScrollView>
+    </LinearLayout>
 
 </LinearLayout>
