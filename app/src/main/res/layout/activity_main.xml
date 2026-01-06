@@ -58,27 +58,45 @@
                 android:backgroundTint="#6200EE"
                 android:text="" />
 
-            <Button
-                android:id="@+id/btnGeneratePayload"
+            <CheckBox
+                android:id="@+id/cbEnableCamouflage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Generate Payload"
-                android:backgroundTint="#444444"
+                android:text="Enable HTTP Camouflage"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:layout_marginBottom="8dp" />
+                android:buttonTint="#6200EE"
+                android:checked="false"
+                android:layout_marginTop="8dp"/>
 
-            <EditText
-                android:id="@+id/etPayload"
+            <LinearLayout
+                android:id="@+id/layoutPayload"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Payload (Optional)"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#AAAAAA"
-                android:inputType="textMultiLine"
-                android:minLines="2"
-                android:backgroundTint="#6200EE"
-                android:text="" />
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/btnGeneratePayload"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Generate Payload"
+                    android:backgroundTint="#444444"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="8dp" />
+
+                <EditText
+                    android:id="@+id/etPayload"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Payload (Optional)"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#AAAAAA"
+                    android:inputType="textMultiLine"
+                    android:minLines="2"
+                    android:backgroundTint="#6200EE"
+                    android:text="" />
+            </LinearLayout>
 
             <EditText
                 android:id="@+id/etUsername"

@@ -9,9 +9,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +23,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etHost: EditText
     private lateinit var etPort: EditText
     private lateinit var etSni: EditText
+    private lateinit var cbEnableCamouflage: CheckBox
+    private lateinit var layoutPayload: LinearLayout
     private lateinit var etPayload: EditText
     private lateinit var btnGeneratePayload: Button
     private lateinit var etUsername: EditText
@@ -54,6 +58,8 @@ class MainActivity : AppCompatActivity() {
         etHost = findViewById(R.id.etHost)
         etPort = findViewById(R.id.etPort)
         etSni = findViewById(R.id.etSni)
+        cbEnableCamouflage = findViewById(R.id.cbEnableCamouflage)
+        layoutPayload = findViewById(R.id.layoutPayload)
         etPayload = findViewById(R.id.etPayload)
         btnGeneratePayload = findViewById(R.id.btnGeneratePayload)
         etUsername = findViewById(R.id.etUsername)
@@ -64,6 +70,10 @@ class MainActivity : AppCompatActivity() {
         btnClearLogs = findViewById(R.id.btnClearLogs)
         tvStatus = findViewById(R.id.tvStatus)
         tvLogs = findViewById(R.id.tvLogs)
+
+        cbEnableCamouflage.setOnCheckedChangeListener { _, isChecked ->
+            layoutPayload.visibility = if (isChecked) View.VISIBLE else View.GONE
+        }
 
         btnGeneratePayload.setOnClickListener {
             val payloadTemplate = "GET / HTTP/1.1[crlf]Host: [host][crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]"
@@ -129,14 +139,21 @@ class MainActivity : AppCompatActivity() {
             val host = etHost.text.toString().trim()
             val portStr = etPort.text.toString().trim()
             val sni = etSni.text.toString().trim()
-            val payload = etPayload.text.toString() // No trim, spaces might be significant in payload
+            val enableCamouflage = cbEnableCamouflage.isChecked
+            val payload = etPayload.text.toString() // No trim, spaces might be significant
             val username = etUsername.text.toString().trim()
             val password = etPassword.text.toString().trim()
             val forceTls12 = cbForceTls12.isChecked
 
             if (host.isEmpty() || portStr.isEmpty() || username.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "All fields are required", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Server, Port, User, and Pass are required", Toast.LENGTH_SHORT).show()
                 return
+            }
+
+            // Enforce SNI as Mandatory for this "Zero-Rated Research" tool
+            if (sni.isEmpty()) {
+                 Toast.makeText(this, "SNI Host is REQUIRED for this research tool.", Toast.LENGTH_LONG).show()
+                 return
             }
 
             val port = try {
@@ -150,6 +167,7 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra(DTechVpnService.EXTRA_HOST, host)
             intent.putExtra(DTechVpnService.EXTRA_PORT, port)
             intent.putExtra(DTechVpnService.EXTRA_SNI, sni)
+            intent.putExtra(DTechVpnService.EXTRA_ENABLE_CAMOUFLAGE, enableCamouflage)
             intent.putExtra(DTechVpnService.EXTRA_PAYLOAD, payload)
             intent.putExtra(DTechVpnService.EXTRA_USERNAME, username)
             intent.putExtra(DTechVpnService.EXTRA_PASSWORD, password)

@@ -19,6 +19,7 @@ class DTechVpnService : VpnService() {
         const val EXTRA_HOST = "host"
         const val EXTRA_PORT = "port"
         const val EXTRA_SNI = "sni"
+        const val EXTRA_ENABLE_CAMOUFLAGE = "enable_camouflage"
         const val EXTRA_PAYLOAD = "payload"
         const val EXTRA_USERNAME = "username"
         const val EXTRA_PASSWORD = "password"
@@ -31,6 +32,8 @@ class DTechVpnService : VpnService() {
         const val STATUS_DISCONNECTED = 0
         const val STATUS_CONNECTING = 1
         const val STATUS_CONNECTED = 2
+
+        private const val MAX_RETRIES = 3
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
@@ -49,13 +52,14 @@ class DTechVpnService : VpnService() {
             val host = intent.getStringExtra(EXTRA_HOST) ?: ""
             val port = intent.getIntExtra(EXTRA_PORT, 22)
             val sni = intent.getStringExtra(EXTRA_SNI) ?: ""
+            val enableCamouflage = intent.getBooleanExtra(EXTRA_ENABLE_CAMOUFLAGE, false)
             val payload = intent.getStringExtra(EXTRA_PAYLOAD) ?: ""
             val user = intent.getStringExtra(EXTRA_USERNAME) ?: ""
             val pass = intent.getStringExtra(EXTRA_PASSWORD) ?: ""
             val forceTls12 = intent.getBooleanExtra(EXTRA_FORCE_TLS_12, false)
 
             if (!isRunning.get()) {
-                startVpn(host, port, sni, payload, user, pass, forceTls12)
+                startVpn(host, port, sni, payload, enableCamouflage, user, pass, forceTls12)
             }
             return START_STICKY
         }
@@ -63,22 +67,45 @@ class DTechVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
-    private fun startVpn(host: String, port: Int, sni: String, payload: String, user: String, pass: String, forceTls12: Boolean) {
+    private fun startVpn(host: String, port: Int, sni: String, payload: String, enableCamouflage: Boolean, user: String, pass: String, forceTls12: Boolean) {
         log("Starting VPN connection to $host:$port")
         if (sni.isNotEmpty()) log("SNI: $sni")
-        if (payload.isNotEmpty()) log("Payload: [Hidden for brevity]")
+        log("Camouflage: $enableCamouflage")
+        if (enableCamouflage && payload.isNotEmpty()) log("Payload: [Hidden for brevity]")
         log("Force TLS 1.2: $forceTls12")
 
         updateStatus(STATUS_CONNECTING)
         isRunning.set(true)
 
         vpnThread = Thread {
-            try {
-                runVpnLoop(host, port, sni, payload, user, pass, forceTls12)
-            } catch (e: Exception) {
-                log("Error in VPN loop: ${e.message}")
-                e.printStackTrace()
-            } finally {
+            var attempt = 0
+            var connected = false
+
+            while (attempt < MAX_RETRIES && !connected && isRunning.get()) {
+                attempt++
+                if (attempt > 1) {
+                    log("Retrying connection... (Attempt $attempt/$MAX_RETRIES)")
+                    try {
+                        Thread.sleep(2000)
+                    } catch (e: InterruptedException) {
+                        break
+                    }
+                }
+
+                try {
+                    runVpnLoop(host, port, sni, payload, enableCamouflage, user, pass, forceTls12)
+                    connected = true // If runVpnLoop returns normally, it usually means clean exit or connected loop finished?
+                    // Wait, runVpnLoop contains the while(connected) loop.
+                    // If it throws exception, we catch it here.
+                    // If it returns, it means the connection closed.
+                } catch (e: Exception) {
+                    log("Connection failed: ${e.message}")
+                    e.printStackTrace()
+                }
+            }
+
+            // If we exited the loop and are not running, we are done.
+            if (isRunning.get()) {
                 stopVpn()
             }
         }
@@ -98,13 +125,13 @@ class DTechVpnService : VpnService() {
         stopSelf()
     }
 
-    private fun runVpnLoop(host: String, port: Int, sni: String, payload: String, user: String, pass: String, forceTls12: Boolean) {
+    private fun runVpnLoop(host: String, port: Int, sni: String, payload: String, enableCamouflage: Boolean, user: String, pass: String, forceTls12: Boolean) {
         var tunnel: SshTlsTunnel? = null
         try {
             log("Initializing SSH Tunnel...")
 
             // Pass the logging function to the tunnel so it can report progress back to UI
-            tunnel = SshTlsTunnel(host, port, sni, payload, user, pass, forceTls12) { msg -> log(msg) }
+            tunnel = SshTlsTunnel(host, port, sni, payload, enableCamouflage, user, pass, forceTls12) { msg -> log(msg) }
 
             tunnel.connect()
             log("SSH Connection established and authenticated!")
@@ -115,8 +142,8 @@ class DTechVpnService : VpnService() {
             // we will proceed to establish the TUN interface so the phone shows "VPN Connected".
         } catch (e: Exception) {
             log("Failed to connect: ${e.message}")
-            // We exit if connection fails
-            return
+            // Throw to trigger retry logic
+            throw e
         }
 
         // 2. Configure TUN interface
@@ -137,12 +164,14 @@ class DTechVpnService : VpnService() {
             updateStatus(STATUS_CONNECTED)
         } catch (e: Exception) {
             log("Failed to establish TUN: ${e.message}")
-            return
+            tunnel?.close()
+            throw e
         }
 
         val vpnFd = vpnInterface?.fileDescriptor
         if (vpnFd == null) {
-            return
+             tunnel?.close()
+             return
         }
 
         val vpnInput = FileInputStream(vpnFd)

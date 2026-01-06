@@ -14,11 +14,21 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+/**
+ * Implements the Strict Protocol Pipeline for Zero-Rated SNI Tunneling.
+ *
+ * Pipeline:
+ * 1. Raw TCP Socket -> Server Port
+ * 2. TLS Layer (with SNI Injection) -> Handshake
+ * 3. [Optional] HTTP Camouflage (Payload)
+ * 4. SSH Protocol (JSch)
+ */
 class SshTlsTunnel(
     private val host: String,
     private val port: Int,
     private val sni: String,
     private val payload: String,
+    private val enableCamouflage: Boolean, // New flag: "Use Payload"
     private val user: String,
     private val pass: String,
     private val forceTls12: Boolean,
@@ -87,6 +97,7 @@ class SshTlsTunnel(
 
         // 2. Determine the Host to use for SNI and Verification
         // If user provided SNI, use it. Otherwise use the connection host.
+        // In this "Strict SNI" model, SNI should be mandatory, but we fallback gracefully if empty.
         val peerHost = if (sni.isNotEmpty()) sni else host
 
         // 3. Layer the SSL Socket
@@ -112,17 +123,27 @@ class SshTlsTunnel(
         }
 
         logger("Starting TLS Handshake with SNI: $peerHost")
-        socket.startHandshake()
+        try {
+            socket.startHandshake()
+            logger("TLS Handshake successful!")
+        } catch (e: Exception) {
+            logger("TLS Handshake failed: ${e.message}")
+            throw e
+        }
         sslSocket = socket
-        logger("TLS Handshake successful!")
 
-        // 5. Send Payload (if any)
-        if (payload.isNotEmpty()) {
+        // 5. Send Payload (Optional Camouflage)
+        // If disabled, we skip this entirely and go straight to SSH
+        if (enableCamouflage && payload.isNotEmpty()) {
              logger("Sending Payload...")
              val out = socket.outputStream
              val processedPayload = payload.replace("[crlf]", "\r\n")
                                            .replace("[lf]", "\n")
                                            .replace("[cr]", "\r")
+                                           .replace("[host]", host)
+                                           .replace("[port]", port.toString())
+                                           .replace("[sni]", sni)
+
 
              // Ensure it ends with a double CRLF if it looks like an HTTP request
              val finalPayload = if (!processedPayload.endsWith("\r\n\r\n")) {
@@ -141,6 +162,8 @@ class SshTlsTunnel(
              // However, JSch is strict. If it sees "HTTP/1.1 101...", it might fail or it might tolerate it if it finds "SSH-" later.
              // Standard practice in these tools is to strip the HTTP response.
              consumeHttpResponse(socket.inputStream)
+        } else {
+            logger("Payload skipped (Direct SSL/TLS Mode).")
         }
 
         return socket
@@ -151,7 +174,6 @@ class SshTlsTunnel(
         // This is a naive implementation but sufficient for this context.
         logger("Reading HTTP Response...")
         val buffer = StringBuilder()
-        var lastFour = 0 // integer representing last 4 bytes as a rolling hash or simple check
 
         // We read byte by byte to avoid over-reading into the SSH stream
         var b: Int
