@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import com.dtech.vpn.net.Tun2Socks
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
@@ -175,17 +176,14 @@ class DTechVpnService : VpnService() {
         }
 
         val vpnInput = FileInputStream(vpnFd)
-        // val vpnOutput = FileOutputStream(vpnFd)
+        val vpnOutput = FileOutputStream(vpnFd)
 
         // Buffers
         val bufferSize = 32767
-        val packet = ByteBuffer.allocate(bufferSize)
 
         // 3. Forwarding Loop
-        // NOTE: Since we don't have a Tun2Socks implementation (Heavy Logic),
-        // we just keep the loop running to maintain the connection.
-        // Incoming packets from TUN are read and discarded/logged.
-        // This validates the connection logic requested by the user.
+        // Initialize Tun2Socks
+        val tun2Socks = Tun2Socks(tunnel!!.getSession()!!, vpnOutput)
 
         try {
             val buf = ByteArray(bufferSize)
@@ -194,9 +192,8 @@ class DTechVpnService : VpnService() {
                 // Read from TUN (Blocking)
                 val read = vpnInput.read(buf)
                 if (read > 0) {
-                    // Packet captured.
-                    // To make this functional for internet, we would need:
-                    // Tun2Socks.process(buf, read, sshSocksStream)
+                    // Forward to Tun2Socks
+                    tun2Socks.processPacket(buf, read)
                 }
             }
         } catch (e: IOException) {
