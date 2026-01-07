@@ -65,6 +65,14 @@ class DnsForwarder(
         var channel: ChannelDirectTCPIP? = null
         try {
             // 1. Open new channel
+            // Wait up to 10 seconds for Session to be ready
+            var attempts = 0
+            while (!session.isConnected && attempts < 100) {
+                Thread.sleep(100)
+                attempts++
+            }
+            if (!session.isConnected) throw Exception("Session Connect Timeout")
+
             channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
             channel.setHost(dnsServer)
             channel.setPort(53)
@@ -121,6 +129,14 @@ class DnsForwarder(
 
         var channel: ChannelDirectTCPIP? = null
         try {
+            // Wait up to 10 seconds for Session to be ready
+            var attempts = 0
+            while (!session.isConnected && attempts < 100) {
+                Thread.sleep(100)
+                attempts++
+            }
+            if (!session.isConnected) throw Exception("Session Connect Timeout")
+
             channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
             channel.setHost(dnsServer)
             channel.setPort(53)

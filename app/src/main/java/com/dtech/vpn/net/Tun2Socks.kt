@@ -89,7 +89,7 @@ class Tun2Socks(
                     // TRAFFIC GATING: Check DNS Ready
                     if (!isDnsReady.get()) {
                          // Drop silently or log verbose?
-                         // logger("Dropped SYN (DNS not ready): $key")
+                         logger("TCP DROP: Waiting for DNS Self-Test... (DnsReady=false)")
                          return
                     }
 
