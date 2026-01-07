@@ -25,6 +25,9 @@ class DTechVpnService : VpnService() {
         const val EXTRA_USERNAME = "username"
         const val EXTRA_PASSWORD = "password"
         const val EXTRA_FORCE_TLS_12 = "force_tls12"
+        const val EXTRA_UDPGW_ENABLED = "udpgw_enabled"
+        const val EXTRA_UDPGW_PORT = "udpgw_port"
+        const val EXTRA_DNS_SERVER = "dns_server"
 
         const val BROADCAST_LOG = "com.dtech.vpn.LOG"
         const val BROADCAST_STATUS = "com.dtech.vpn.STATUS"
@@ -58,9 +61,12 @@ class DTechVpnService : VpnService() {
             val user = intent.getStringExtra(EXTRA_USERNAME) ?: ""
             val pass = intent.getStringExtra(EXTRA_PASSWORD) ?: ""
             val forceTls12 = intent.getBooleanExtra(EXTRA_FORCE_TLS_12, false)
+            val udpgwEnabled = intent.getBooleanExtra(EXTRA_UDPGW_ENABLED, true)
+            val udpgwPort = intent.getIntExtra(EXTRA_UDPGW_PORT, 7300)
+            val dnsServer = intent.getStringExtra(EXTRA_DNS_SERVER) ?: "8.8.8.8"
 
             if (!isRunning.get()) {
-                startVpn(host, port, sni, payload, enableCamouflage, user, pass, forceTls12)
+                startVpn(host, port, sni, payload, enableCamouflage, user, pass, forceTls12, udpgwEnabled, udpgwPort, dnsServer)
             }
             return START_STICKY
         }
@@ -68,12 +74,14 @@ class DTechVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
-    private fun startVpn(host: String, port: Int, sni: String, payload: String, enableCamouflage: Boolean, user: String, pass: String, forceTls12: Boolean) {
+    private fun startVpn(host: String, port: Int, sni: String, payload: String, enableCamouflage: Boolean, user: String, pass: String, forceTls12: Boolean, udpgwEnabled: Boolean, udpgwPort: Int, dnsServer: String) {
         log("Starting VPN connection to $host:$port")
         if (sni.isNotEmpty()) log("SNI: $sni")
         log("Camouflage: $enableCamouflage")
         if (enableCamouflage && payload.isNotEmpty()) log("Payload: [Hidden for brevity]")
         log("Force TLS 1.2: $forceTls12")
+        log("UDPGW: $udpgwEnabled (Port: $udpgwPort)")
+        log("DNS Server: $dnsServer")
 
         updateStatus(STATUS_CONNECTING)
         isRunning.set(true)
@@ -94,7 +102,7 @@ class DTechVpnService : VpnService() {
                 }
 
                 try {
-                    runVpnLoop(host, port, sni, payload, enableCamouflage, user, pass, forceTls12)
+                    runVpnLoop(host, port, sni, payload, enableCamouflage, user, pass, forceTls12, udpgwEnabled, udpgwPort, dnsServer)
                     connected = true
                 } catch (e: Exception) {
                     log("Connection failed: ${e.message}")
@@ -123,7 +131,7 @@ class DTechVpnService : VpnService() {
         stopSelf()
     }
 
-    private fun runVpnLoop(host: String, port: Int, sni: String, payload: String, enableCamouflage: Boolean, user: String, pass: String, forceTls12: Boolean) {
+    private fun runVpnLoop(host: String, port: Int, sni: String, payload: String, enableCamouflage: Boolean, user: String, pass: String, forceTls12: Boolean, udpgwEnabled: Boolean, udpgwPort: Int, dnsServer: String) {
         var tunnel: SshTlsTunnel? = null
         try {
             log("Initializing SSH Tunnel...")
@@ -172,7 +180,7 @@ class DTechVpnService : VpnService() {
         val vpnOutput = FileOutputStream(vpnFd)
 
         // Initialize Tun2Socks
-        val tun2Socks = Tun2Socks(tunnel.getSession()!!, vpnOutput) { msg -> log(msg) }
+        val tun2Socks = Tun2Socks(tunnel.getSession()!!, vpnOutput, udpgwEnabled, udpgwPort, dnsServer) { msg -> log(msg) }
         log("Tun2Socks Initialized")
 
         // 3. Forwarding Loop

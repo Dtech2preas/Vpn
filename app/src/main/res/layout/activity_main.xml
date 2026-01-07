@@ -127,6 +127,47 @@
                 android:buttonTint="#6200EE"
                 android:layout_marginTop="8dp"/>
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Advanced Settings"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp"/>
+
+            <CheckBox
+                android:id="@+id/cbEnableUdpGw"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Enable UDPGW (Standard Port 7300)"
+                android:textColor="#FFFFFF"
+                android:buttonTint="#6200EE"
+                android:checked="true" />
+
+            <EditText
+                android:id="@+id/etUdpGwPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="UDPGW Port"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:inputType="number"
+                android:backgroundTint="#6200EE"
+                android:text="7300" />
+
+            <EditText
+                android:id="@+id/etCustomDns"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Custom DNS (e.g. 1.1.1.1)"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAAAAA"
+                android:inputType="textUri"
+                android:backgroundTint="#6200EE"
+                android:text="8.8.8.8" />
+
             <Button
                 android:id="@+id/btnConnect"
                 android:layout_width="match_parent"

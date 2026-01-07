@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class DnsForwarder(
     private val tun2Socks: Tun2Socks,
     private val session: Session,
+    private val dnsServer: String,
     private val logger: (String) -> Unit
 ) {
     private var channel: ChannelDirectTCPIP? = null
@@ -44,11 +45,11 @@ class DnsForwarder(
         while (isRunning && session.isConnected) {
             try {
                 // Persistent connection logic
-                logger("DNS: Connecting persistent channel to 8.8.8.8:53...")
+                logger("DNS: Connecting persistent channel to $dnsServer:53...")
 
                 // Open Channel
                 val newChannel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
-                newChannel.setHost("8.8.8.8")
+                newChannel.setHost(dnsServer)
                 newChannel.setPort(53)
                 newChannel.connect(10000)
 
