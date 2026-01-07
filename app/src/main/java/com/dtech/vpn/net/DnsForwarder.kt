@@ -60,16 +60,8 @@ class DnsForwarder(
 
                 logger("DNS: Channel opened.")
 
-                // Perform mandatory self-test before declaring ready
-                if (performSelfTest()) {
-                    logger("DNS: Self-test passed. Ready.")
-                    tun2Socks.setDnsReady(true)
-                } else {
-                    logger("DNS: Self-test failed.")
-                    closeChannel()
-                    // Retry loop will wait 2s below
-                    throw Exception("Self-test failed")
-                }
+                // Send self-test query asynchronously
+                sendSelfTestQuery()
 
                 // Response Reader Loop
                 val currentIn = inStream
@@ -104,15 +96,11 @@ class DnsForwarder(
         logger("DNS: Handler stopped.")
     }
 
-    private fun performSelfTest(): Boolean {
-        // Simple query for google.com or similar.
-        // We construct a raw DNS query for "google.com" (A record).
-        // Header: ID=1234, Flags=0100 (Standard Query), QDCOUNT=1, AN=0, NS=0, AR=0
-        // Query: 6google3com0, Type=1 (A), Class=1 (IN)
-        val testId = 12345
+    private fun sendSelfTestQuery() {
+        // ID = 0 for self-test
         val query = byteArrayOf(
             // Header
-            (testId shr 8).toByte(), (testId and 0xFF).toByte(), // ID
+            0x00, 0x00, // ID=0
             0x01, 0x00, // Flags: Std Query
             0x00, 0x01, // QDCOUNT: 1
             0x00, 0x00, // ANCOUNT
@@ -127,55 +115,7 @@ class DnsForwarder(
             // QCLASS: IN (1)
             0x00, 0x01
         )
-
-        val latch = java.util.concurrent.CountDownLatch(1)
-        var success = false
-
-        // We temporarily register this ID to intercept the response
-        // Use a negative ID or special handling?
-        // Our map key is Int, so we can use the testId directly if we bypass the generator.
-
-        // We need a special 'TestQueryMetadata' or just handle it in processResponse?
-        // Let's use the standard flow but with a dummy metadata
-        val dummyMeta = QueryMetadata(0,0,0,0, testId.toShort())
-
-        // IMPORTANT: The processResponse removes from map. We need to know if it was ours.
-        // We can check if pendingQueries contains it.
-        // Wait, 'processPacket' generates a NEW ID.
-        // For self test, we want to bypass 'processPacket' and send directly.
-
-        // We need to inject into pendingQueries with the ID we send.
-        pendingQueries[testId] = dummyMeta
-
-        try {
-            sendOverTcp(query)
-
-            // Wait for response
-            // processResponse will remove it from map and normally try to send to TUN.
-            // If srcIp is 0, sendResponseToTun should probably ignore it or we handle it here.
-            // But processResponse runs on this same thread? NO.
-            // connectAndLoop IS the reader thread (after test).
-            // Ah, I cannot block here waiting for the reader loop because I AM the reader loop context (or I am blocking it).
-            // The reader loop STARTS after this test.
-            // So how do I read the response?
-
-            // I must read the response HERE manually for the test.
-            val currentIn = inStream ?: return false
-            val len = currentIn.readUnsignedShort()
-            val buffer = ByteArray(len)
-            currentIn.readFully(buffer)
-
-            // Verify ID
-            val respId = getShort(buffer, 0).toInt() and 0xFFFF
-            if (respId == testId) {
-                return true
-            }
-        } catch (e: Exception) {
-            logger("DNS Self Test Error: ${e.message}")
-        } finally {
-            pendingQueries.remove(testId)
-        }
-        return false
+        sendOverTcp(query)
     }
 
     private fun closeChannel() {
@@ -204,8 +144,11 @@ class DnsForwarder(
         // 1. Extract Original ID
         val originalId = getShort(query, 0)
 
-        // 2. Generate New ID (Ensure it doesn't conflict with our test ID 12345 if we used that, but we only test at start)
-        val newId = transactionIdGen.getAndIncrement() and 0xFFFF
+        // 2. Generate New ID (Ensure it doesn't conflict with our test ID 0)
+        var newId = transactionIdGen.getAndIncrement() and 0xFFFF
+        if (newId == 0) {
+            newId = transactionIdGen.getAndIncrement() and 0xFFFF
+        }
 
         // 3. Store Mapping
         pendingQueries[newId] = QueryMetadata(srcIp, srcPort, dstIp, dstPort, originalId)
@@ -241,6 +184,13 @@ class DnsForwarder(
         // 1. Extract ID
         val id = getShort(response, 0).toInt() and 0xFFFF
 
+        // Check for self-test ID (0)
+        if (id == 0) {
+            logger("DNS: Self-test passed. Ready.")
+            tun2Socks.setDnsReady(true)
+            return
+        }
+
         // 2. Lookup Mapping
         val meta = pendingQueries.remove(id)
         if (meta == null) {
@@ -253,10 +203,7 @@ class DnsForwarder(
         setShort(response, 0, meta.originalId)
 
         // 4. Construct UDP Packet and inject to Tun
-        // If it was a dummy meta (srcIp=0), we ignore (though self-test handles its own read)
-        if (meta.srcIp != 0) {
-            sendResponseToTun(meta, response)
-        }
+        sendResponseToTun(meta, response)
     }
 
     private fun sendResponseToTun(meta: QueryMetadata, response: ByteArray) {
