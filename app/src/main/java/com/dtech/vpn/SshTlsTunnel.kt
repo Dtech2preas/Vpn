@@ -78,6 +78,11 @@ class SshTlsTunnel(
         session?.setServerAliveInterval(15000) // Send keepalive every 15 seconds
         // Increased timeout to 60s for slow mobile networks and WS handshake
         session?.connect(60000)
+
+        // Enable Dynamic Port Forwarding (SOCKS5 Server)
+        // This listens on localhost:10808 and forwards traffic through the SSH tunnel
+        session?.setPortForwardingD("127.0.0.1", 10808)
+        logger("SOCKS5 Proxy enabled on 127.0.0.1:10808")
     }
 
     private fun createTlsSocket(): Socket {

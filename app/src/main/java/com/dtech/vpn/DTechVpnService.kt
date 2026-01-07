@@ -12,11 +12,8 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.dtech.vpn.net.Tun2Socks
-import java.io.FileInputStream
-import java.io.FileOutputStream
+import hev.socks5.tunnel.Tun2Socks
 import java.io.IOException
-import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DTechVpnService : VpnService() {
@@ -192,40 +189,31 @@ class DTechVpnService : VpnService() {
             throw e
         }
 
-        val vpnFd = vpnInterface?.fileDescriptor
-        if (vpnFd == null) {
+        // We need the raw file descriptor as an Int for the native library
+        // detachFd() returns the FD and closes the Java object, passing ownership to native.
+        val vpnFd = vpnInterface?.detachFd() ?: -1
+        if (vpnFd == -1) {
              tunnel?.close()
              return
         }
 
-        val vpnInput = FileInputStream(vpnFd)
-        val vpnOutput = FileOutputStream(vpnFd)
-
-        // Initialize Tun2Socks
-        val tun2Socks = Tun2Socks(tunnel.getSession()!!, vpnOutput, udpgwEnabled, udpgwPort, dnsServer) { msg -> log(msg) }
-        log("Tun2Socks Initialized")
-
-        // 3. Forwarding Loop
+        log("Starting Tun2Socks Native...")
         try {
-            val buf = ByteArray(16384)
-            val buffer = ByteBuffer.wrap(buf)
+            // Start the native transparent proxy
+            // vpnFd: The TUN interface
+            // proxyUrl: The local SOCKS5 server we just started in SSH
+            // netFd: 0 (Let the library protect the socket automatically or we handle it via SSH)
+            // dns: The user's custom DNS
+            // mtu: 1050 (Safe MTU)
+            Tun2Socks.Start(vpnFd, "socks5://127.0.0.1:10808", 0, dnsServer.ifEmpty { "1.1.1.1" }, 1050)
 
-            while (isRunning.get() && tunnel.isConnected()) {
-                // Read from TUN (Blocking)
-                val read = vpnInput.read(buf)
-                if (read > 0) {
-                    buffer.position(0)
-                    buffer.limit(read)
-                    tun2Socks.processPacket(buffer, read)
-                }
-            }
-        } catch (e: IOException) {
-            if (isRunning.get()) {
-                log("TUN reader error: ${e.message}")
-            }
+            // Tun2Socks.Start blocks until Tun2Socks.Stop() is called or error
+            log("Tun2Socks has stopped.")
+        } catch (e: Exception) {
+            log("Tun2Socks Native Error: ${e.message}")
         } finally {
             log("VPN Loop Finished")
-            tun2Socks.close() // Close DNS thread and connections
+            Tun2Socks.Stop()
             try {
                 tunnel.close()
             } catch (e: Exception) {}
