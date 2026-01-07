@@ -49,10 +49,6 @@ class SshTlsTunnel(
         // Skip host key check for simplicity in this user tool context
         val config = java.util.Properties()
         config["StrictHostKeyChecking"] = "no"
-        // Harden JSch Configuration (Safe Defaults)
-        config["cipher.s2c"] = "aes128-ctr,aes256-ctr,aes128-gcm"
-        config["cipher.c2s"] = "aes128-ctr,aes256-ctr,aes128-gcm"
-        config["CheckCiphers"] = "aes128-ctr,aes256-ctr,aes128-gcm"
         session?.setConfig(config)
 
         // Set custom socket factory to use SSL/TLS
