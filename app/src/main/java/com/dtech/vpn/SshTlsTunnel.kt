@@ -50,9 +50,10 @@ class SshTlsTunnel(
         val config = java.util.Properties()
         config["StrictHostKeyChecking"] = "no"
         // Harden JSch Configuration (Safe Defaults)
-        config["cipher.s2c"] = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc"
-        config["cipher.c2s"] = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc"
-        config["CheckCiphers"] = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc"
+        config["cipher.s2c"] = "aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc,aes192-cbc,aes256-cbc"
+        config["cipher.c2s"] = "aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc,aes192-cbc,aes256-cbc"
+        config["kex"] = "diffie-hellman-group1-sha1,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,diffie-hellman-group-exchange-sha256"
+        config["CheckCiphers"] = "aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc,aes192-cbc,aes256-cbc"
         session?.setConfig(config)
 
         // Set custom socket factory to use SSL/TLS
@@ -189,6 +190,7 @@ class SshTlsTunnel(
                  wsIn = WebSocketInputStream(socket.inputStream, logger) {
                      // Callback: Detected Raw SSH
                      wsOutLocal.setRawMode(true)
+                     try { Thread.sleep(150) } catch (e: Exception) {}
                  }
              }
         } else {
