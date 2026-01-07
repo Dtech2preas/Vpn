@@ -50,10 +50,9 @@ class SshTlsTunnel(
         val config = java.util.Properties()
         config["StrictHostKeyChecking"] = "no"
         // Harden JSch Configuration (Safe Defaults)
-        config["cipher.s2c"] = "aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc,aes192-cbc,aes256-cbc"
-        config["cipher.c2s"] = "aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc,aes192-cbc,aes256-cbc"
-        config["kex"] = "diffie-hellman-group1-sha1,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,diffie-hellman-group-exchange-sha256"
-        config["CheckCiphers"] = "aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc,aes192-cbc,aes256-cbc"
+        config["cipher.s2c"] = "aes128-ctr,aes256-ctr,aes128-gcm"
+        config["cipher.c2s"] = "aes128-ctr,aes256-ctr,aes128-gcm"
+        config["CheckCiphers"] = "aes128-ctr,aes256-ctr,aes128-gcm"
         session?.setConfig(config)
 
         // Set custom socket factory to use SSL/TLS
