@@ -10,7 +10,10 @@ import kotlin.math.min
  * Implements a minimal WebSocket Framing Layer (RFC 6455).
  * Designed to wrap an existing InputStream/OutputStream to transparently frame data.
  */
-class WebSocketInputStream(private val inner: InputStream) : InputStream() {
+class WebSocketInputStream(
+    private val inner: InputStream,
+    private val logger: (String) -> Unit = {}
+) : InputStream() {
     private var buffer: ByteArray = ByteArray(0)
     private var bufferPos = 0
     private val maskKey = ByteArray(4)
@@ -51,14 +54,21 @@ class WebSocketInputStream(private val inner: InputStream) : InputStream() {
 
         // 1. Read first byte (FIN, RSV, Opcode)
         val b1 = inner.read()
-        if (b1 == -1) return false
+        if (b1 == -1) {
+            logger("WebSocket EOF reading first byte")
+            return false
+        }
 
         // val fin = (b1 and 0x80) != 0
         val opcode = b1 and 0x0F
+        // logger("WS Opcode: $opcode")
 
         // 2. Read second byte (Mask, Payload Len)
         val b2 = inner.read()
-        if (b2 == -1) return false
+        if (b2 == -1) {
+            logger("WebSocket EOF reading second byte")
+            return false
+        }
 
         val masked = (b2 and 0x80) != 0
         var payloadLen = (b2 and 0x7F).toLong()
@@ -89,6 +99,7 @@ class WebSocketInputStream(private val inner: InputStream) : InputStream() {
         // Handle Control Frames (Ping/Pong/Close)
         // Opcode 0x8 (Close), 0x9 (Ping), 0xA (Pong)
         if (opcode == 0x8) {
+             logger("WebSocket Close Frame received")
              return false // Close
         }
 
@@ -98,17 +109,21 @@ class WebSocketInputStream(private val inner: InputStream) : InputStream() {
         // If we get a Ping, we should read the payload and discard it, then recurse.
         if (opcode != 0x0 && opcode != 0x1 && opcode != 0x2) {
              // Skip payload
+             logger("Skipping control frame or unknown opcode: $opcode, len: $payloadLen")
              skipBytes(payloadLen)
              return readNextFrame()
         }
 
         // 5. Read Payload
         if (payloadLen > Int.MAX_VALUE - 8) {
-            throw IOException("Frame too large")
+            throw IOException("Frame too large: $payloadLen")
         }
         val len = payloadLen.toInt()
         val payload = ByteArray(len)
-        if (readFull(payload) < len) return false
+        if (readFull(payload) < len) {
+            logger("WebSocket EOF reading payload")
+            return false
+        }
 
         // 6. Unmask if needed
         if (masked) {
@@ -147,7 +162,10 @@ class WebSocketInputStream(private val inner: InputStream) : InputStream() {
     }
 }
 
-class WebSocketOutputStream(private val inner: OutputStream) : OutputStream() {
+class WebSocketOutputStream(
+    private val inner: OutputStream,
+    private val logger: (String) -> Unit = {}
+) : OutputStream() {
     private val random = SecureRandom()
     private val maskKey = ByteArray(4)
 

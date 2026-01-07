@@ -76,7 +76,8 @@ class SshTlsTunnel(
 
         // 30 seconds timeout
         session?.setServerAliveInterval(15000) // Send keepalive every 15 seconds
-        session?.connect(30000)
+        // Increased timeout to 60s for slow mobile networks and WS handshake
+        session?.connect(60000)
     }
 
     private fun createTlsSocket(): Socket {
@@ -174,8 +175,8 @@ class SshTlsTunnel(
              if (checkAndConsumeHttpResponse(socket.inputStream)) {
                  logger("Switching to WebSocket Framing Mode.")
                  isWebSocket = true
-                 wsIn = WebSocketInputStream(socket.inputStream)
-                 wsOut = WebSocketOutputStream(socket.outputStream)
+                 wsIn = WebSocketInputStream(socket.inputStream, logger)
+                 wsOut = WebSocketOutputStream(socket.outputStream, logger)
              }
         } else {
             logger("Payload skipped (Direct SSL/TLS Mode).")
