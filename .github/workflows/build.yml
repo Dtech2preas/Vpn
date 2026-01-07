@@ -26,21 +26,23 @@ jobs:
 
     - name: Download and Extract Tun2Socks Libs
       run: |
-        # Create directories
         mkdir -p app/src/main/jniLibs/arm64-v8a/
         mkdir -p app/src/main/jniLibs/armeabi-v7a/
 
-        # Download APK
         wget -O temp_vpn.apk https://github.com/heiher/sockstun/releases/download/6.0/hev.sockstun-6.0-release.apk
 
-        # Extract .so files directly to destination
-        unzip -p temp_vpn.apk lib/arm64-v8a/libtun2socks.so > app/src/main/jniLibs/arm64-v8a/libtun2socks.so
-        unzip -p temp_vpn.apk lib/armeabi-v7a/libtun2socks.so > app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+        # DEBUG: List file contents to find the correct path
+        unzip -l temp_vpn.apk
 
-        # Cleanup
+        # Extract allowing for potential path variations (flattening the path)
+        unzip -j temp_vpn.apk "lib/arm64-v8a/*tun2socks.so" -d app/src/main/jniLibs/arm64-v8a/
+        unzip -j temp_vpn.apk "lib/armeabi-v7a/*tun2socks.so" -d app/src/main/jniLibs/armeabi-v7a/
+
+        # Rename if necessary (in case it's named libhev-socks5-tunnel.so)
+        mv app/src/main/jniLibs/arm64-v8a/*.so app/src/main/jniLibs/arm64-v8a/libtun2socks.so
+        mv app/src/main/jniLibs/armeabi-v7a/*.so app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+
         rm temp_vpn.apk
-
-        # Verify
         ls -R app/src/main/jniLibs/
 
     - name: Build with Gradle
