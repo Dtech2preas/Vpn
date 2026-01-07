@@ -44,6 +44,17 @@ jobs:
         # Verify (This should show libtun2socks.so in both folders)
         ls -R app/src/main/jniLibs/
 
+    - name: Inspect JNI Signature
+      run: |
+        echo "=== JNI SYMBOL DUMP ==="
+        # Install binutils to get 'nm' if missing (usually present on Ubuntu)
+        sudo apt-get update && sudo apt-get install -y binutils
+
+        # Dump all Java symbols from the ARM64 library
+        nm -D app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep "Java_"
+
+        echo "=== END DUMP ==="
+
     - name: Build with Gradle
       run: ./gradlew assembleDebug
 
