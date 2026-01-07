@@ -1,5 +1,6 @@
 package com.dtech.vpn
 
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -15,7 +16,7 @@ import kotlin.math.min
 class WebSocketInputStream(
     private val inner: InputStream,
     private val logger: (String) -> Unit = {},
-    private val onRawModeDetected: () -> Unit = {}
+    private val onProtocolDetected: (Boolean) -> Unit = {} // true=Raw, false=WS
 ) : InputStream() {
     private var buffer: ByteArray = ByteArray(0)
     private var bufferPos = 0
@@ -66,25 +67,10 @@ class WebSocketInputStream(
             // We use inner.read directly here because we are populating the buffer
             // for the first time.
             try {
-                // If stream blocks, we block. That's fine.
-                // If stream is empty/closed, we handle it.
-                // We don't want to block indefinitely if there are fewer than 4 bytes available
-                // but usually the server sends a banner or a frame immediately.
-                // However, read() blocks until input is available.
-                // To avoid blocking forever if the server is slow, we might just read one byte
-                // and see if it looks like 'S' or valid WS header?
-                // But let's stick to the plan: Read 4 bytes.
-                // Note: available() is not reliable.
-
                 // We'll try to read 4 bytes. If we get less because of EOF, we stop.
                 val r = inner.read(headerBuffer, readCount, 4 - readCount)
                 if (r == -1) break
                 readCount += r
-
-                // Optimization: If we have read at least 1 byte and it's NOT 'S' (0x53)
-                // and looks like a WS frame (0x81, 0x82), we could maybe abort sniffing early?
-                // But for safety, let's try to get 4 bytes or wait.
-                // Actually, if we are in this constructor, we expect data.
             } catch (e: IOException) {
                 break
             }
@@ -101,10 +87,11 @@ class WebSocketInputStream(
 
             isRawMode = true
             logger("Detected raw SSH Banner (SSH-). Switching to Raw Mode (Bypassing WebSocket Reads).")
-            onRawModeDetected()
+            onProtocolDetected(true)
         } else {
             isRawMode = false
             // logger("Sniffed ${headerBufferLen} bytes. No SSH banner detected. Continuing with WebSocket.")
+            onProtocolDetected(false)
         }
         sniffed = true
     }
@@ -281,22 +268,55 @@ class WebSocketOutputStream(
     private val maskKey = ByteArray(4)
     private var isRawMode = false
 
+    // Buffering state to handle initial handshake ambiguity
+    private val pendingBuffer = ByteArrayOutputStream()
+    private var isModeDetermined = false
+
+    fun determineMode(isRaw: Boolean) {
+        synchronized(this) {
+            if (isModeDetermined) return
+            isRawMode = isRaw
+            isModeDetermined = true
+            logger("WebSocketOutputStream: Mode determined. Raw=$isRaw")
+            flushPending()
+        }
+    }
+
+    // Deprecated alias, but useful for compatibility
     fun setRawMode(enabled: Boolean) {
-        if (isRawMode != enabled) {
-            isRawMode = enabled
-            logger("WebSocketOutputStream: Raw Mode set to $enabled")
+        determineMode(enabled)
+    }
+
+    private fun flushPending() {
+        if (pendingBuffer.size() > 0) {
+            val data = pendingBuffer.toByteArray()
+            pendingBuffer.reset()
+            logger("Flushing ${data.size} buffered bytes")
+            writeInternal(data, 0, data.size)
         }
     }
 
     override fun write(b: Int) {
-        if (isRawMode) {
-            inner.write(b)
-            return
+        synchronized(this) {
+            if (!isModeDetermined) {
+                pendingBuffer.write(b)
+                return
+            }
         }
-        write(byteArrayOf(b.toByte()), 0, 1)
+        writeInternal(byteArrayOf(b.toByte()), 0, 1)
     }
 
     override fun write(b: ByteArray, off: Int, len: Int) {
+        synchronized(this) {
+            if (!isModeDetermined) {
+                pendingBuffer.write(b, off, len)
+                return
+            }
+        }
+        writeInternal(b, off, len)
+    }
+
+    private fun writeInternal(b: ByteArray, off: Int, len: Int) {
         if (isRawMode) {
             inner.write(b, off, len)
             inner.flush()
@@ -340,5 +360,13 @@ class WebSocketOutputStream(
         }
         inner.write(masked)
         inner.flush()
+    }
+
+    override fun flush() {
+        synchronized(this) {
+            if (isModeDetermined) {
+                inner.flush()
+            }
+        }
     }
 }
