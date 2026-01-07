@@ -44,15 +44,19 @@ jobs:
         # Verify (This should show libtun2socks.so in both folders)
         ls -R app/src/main/jniLibs/
 
-    - name: Inspect JNI Signature
+    - name: Inspect Strings for JNI Class
       run: |
-        echo "=== JNI SYMBOL DUMP ==="
-        # Install binutils to get 'nm' if missing (usually present on Ubuntu)
+        echo "=== STRING DUMP ==="
+        # Install binutils (if needed)
         sudo apt-get update && sudo apt-get install -y binutils
 
-        # Dump all Java symbols from the ARM64 library
-        nm -D app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep "Java_"
-
+        # Dump strings and look for the package path (e.g., hev/sockstun)
+        # We accept exit code 1 in grep to prevent build failure if empty
+        strings app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep "hev/" || true
+        
+        echo "=== CHECKING FOR CONFIG KEYWORDS ==="
+        strings app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep -E "config|proxy|socks" || true
+        
         echo "=== END DUMP ==="
 
     - name: Build with Gradle
