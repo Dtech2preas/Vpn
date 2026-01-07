@@ -65,6 +65,7 @@ class Tun2Socks(
 
             // DNS Priority: Intercept Port 53 and send via DnsForwarder (TCP)
             if (dstPort == 53) {
+                logger("TUN: Port 53 match! Handing to Forwarder...")
                 val payloadLen = totalLen - ipHeaderLen - 8
                 dnsForwarder.processPacket(buffer, ipHeaderLen, 8, payloadLen)
             } else if (enableUdpGw && udpGwClient != null) {

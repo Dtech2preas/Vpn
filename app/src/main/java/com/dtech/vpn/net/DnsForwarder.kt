@@ -37,7 +37,10 @@ class DnsForwarder(
     }
 
     fun processPacket(buffer: ByteBuffer, ipHeaderLen: Int, udpHeaderLen: Int, payloadLen: Int) {
-        if (!isRunning || !session.isConnected) return
+        if (!isRunning || !session.isConnected) {
+            logger("DNS DROP: Forwarder not running or Session disconnected. Running=$isRunning, Connected=${session.isConnected}")
+            return
+        }
 
         val srcIp = Packet.getIPSrcInt(buffer)
         val dstIp = Packet.getIPDstInt(buffer)
@@ -49,8 +52,12 @@ class DnsForwarder(
         buffer.position(ipHeaderLen + udpHeaderLen)
         buffer.get(query)
 
-        executor.submit {
-            handleQuery(srcIp, srcPort, dstIp, dstPort, query)
+        try {
+            executor.submit {
+                handleQuery(srcIp, srcPort, dstIp, dstPort, query)
+            }
+        } catch (e: Exception) {
+            logger("DNS: Failed to submit query task: ${e.message}")
         }
     }
 
