@@ -195,6 +195,7 @@ class DTechVpnService : VpnService() {
             }
         } finally {
             log("VPN Loop Finished")
+            tun2Socks.close() // Close DNS thread and connections
             try {
                 tunnel.close()
             } catch (e: Exception) {}

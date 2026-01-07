@@ -66,6 +66,7 @@ class SshTlsTunnel(
         })
 
         // 30 seconds timeout
+        session?.setServerAliveInterval(15000) // Send keepalive every 15 seconds
         session?.connect(30000)
     }
 
