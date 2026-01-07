@@ -38,8 +38,8 @@ class SshTlsTunnel(
     private var session: Session? = null
     private var sslSocket: SSLSocket? = null
     private var isWebSocket = false
-    private var wsIn: InputStream? = null
-    private var wsOut: OutputStream? = null
+    private var wsIn: WebSocketInputStream? = null
+    private var wsOut: WebSocketOutputStream? = null
 
     fun connect() {
         val jsch = JSch()
@@ -49,6 +49,10 @@ class SshTlsTunnel(
         // Skip host key check for simplicity in this user tool context
         val config = java.util.Properties()
         config["StrictHostKeyChecking"] = "no"
+        // Harden JSch Configuration (Safe Defaults)
+        config["cipher.s2c"] = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc"
+        config["cipher.c2s"] = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc"
+        config["CheckCiphers"] = "aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc"
         session?.setConfig(config)
 
         // Set custom socket factory to use SSL/TLS
@@ -175,8 +179,17 @@ class SshTlsTunnel(
              if (checkAndConsumeHttpResponse(socket.inputStream)) {
                  logger("Switching to WebSocket Framing Mode.")
                  isWebSocket = true
-                 wsIn = WebSocketInputStream(socket.inputStream, logger)
-                 wsOut = WebSocketOutputStream(socket.outputStream, logger)
+
+                 // Create Output Stream first so it's available for reference,
+                 // although the input stream uses it in a callback, which will be called later.
+                 val wsOutLocal = WebSocketOutputStream(socket.outputStream, logger)
+                 wsOut = wsOutLocal
+
+                 // Pass callback to switch output mode if raw banner detected
+                 wsIn = WebSocketInputStream(socket.inputStream, logger) {
+                     // Callback: Detected Raw SSH
+                     wsOutLocal.setRawMode(true)
+                 }
              }
         } else {
             logger("Payload skipped (Direct SSL/TLS Mode).")
