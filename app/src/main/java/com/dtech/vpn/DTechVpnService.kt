@@ -1,9 +1,17 @@
 package com.dtech.vpn
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import com.dtech.vpn.net.Tun2Socks
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -14,6 +22,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DTechVpnService : VpnService() {
 
     companion object {
+        const val NOTIFICATION_CHANNEL_ID = "vpn_channel"
+        const val NOTIFICATION_ID = 1
+
         const val ACTION_CONNECT = "com.dtech.vpn.CONNECT"
         const val ACTION_DISCONNECT = "com.dtech.vpn.DISCONNECT"
 
@@ -43,6 +54,12 @@ class DTechVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var vpnThread: Thread? = null
     private val isRunning = AtomicBoolean(false)
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
@@ -53,6 +70,9 @@ class DTechVpnService : VpnService() {
         }
 
         if (action == ACTION_CONNECT) {
+            startForegroundService()
+            acquireWakeLock()
+
             val host = intent.getStringExtra(EXTRA_HOST) ?: ""
             val port = intent.getIntExtra(EXTRA_PORT, 22)
             val sni = intent.getStringExtra(EXTRA_SNI) ?: ""
@@ -127,6 +147,8 @@ class DTechVpnService : VpnService() {
             // Ignore
         }
         vpnInterface = null
+        releaseWakeLock()
+        stopForeground(true)
         updateStatus(STATUS_DISCONNECTED)
         stopSelf()
     }
@@ -154,7 +176,7 @@ class DTechVpnService : VpnService() {
         builder.addAddress("10.0.0.2", 24)
         builder.addRoute("0.0.0.0", 0)
         builder.addDnsServer(dnsServer.ifEmpty { "1.1.1.1" })
-        builder.setMtu(1200)
+        builder.setMtu(1050)
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             builder.setMetered(false)
@@ -221,6 +243,53 @@ class DTechVpnService : VpnService() {
         val intent = Intent(BROADCAST_STATUS)
         intent.putExtra("status", status)
         sendBroadcast(intent)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val serviceChannel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "VPN Connection",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(serviceChannel)
+        }
+    }
+
+    private fun startForegroundService() {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification: Notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("D-Tech VPN")
+            .setContentText("VPN is connected")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .build()
+
+        startForeground(NOTIFICATION_ID, notification)
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DTechVpn::WakeLock")
+        }
+        if (wakeLock?.isHeld == false) {
+            wakeLock?.acquire()
+            log("WakeLock acquired")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+            log("WakeLock released")
+        }
     }
 
     override fun onDestroy() {
