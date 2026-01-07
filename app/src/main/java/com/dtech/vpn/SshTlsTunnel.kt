@@ -43,6 +43,12 @@ class SshTlsTunnel(
 
     fun connect() {
         val jsch = JSch()
+        JSch.setLogger(object : com.jcraft.jsch.Logger {
+            override fun isEnabled(level: Int): Boolean = true
+            override fun log(level: Int, message: String) {
+                logger("JSch: $message")
+            }
+        })
         session = jsch.getSession(user, host, port)
         session?.setPassword(pass)
 

@@ -25,6 +25,7 @@ class Tun2Socks(
     }
 
     init {
+        logger("Tun2Socks: Initializing... Waiting for DNS.")
         // Start the DNS loop immediately
         dnsForwarder.start()
     }
@@ -73,9 +74,8 @@ class Tun2Socks(
                 if (isSyn) {
                     // TRAFFIC GATING: Check DNS Ready
                     if (!isDnsReady.get()) {
-                         // Drop silently or log verbose?
-                         // logger("Dropped SYN (DNS not ready): $key")
-                         return
+                         // Log but allow (to enable IP-based traffic or debugging if DNS fails)
+                         logger("Warning: New TCP connection while DNS not ready: $key")
                     }
 
                     // TRAFFIC GATING: Check Concurrent Limit
