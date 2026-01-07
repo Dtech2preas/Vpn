@@ -29,17 +29,14 @@ class Tun2Socks(
     }
 
     init {
+        // Always start DNS Forwarder (TCP) for reliable DNS
+        dnsForwarder.start()
+
         if (enableUdpGw) {
             udpGwClient = UdpGwClient(this, session, udpGwPort, dnsServer, logger)
             udpGwClient.start()
-            // If UDPGW is enabled, we assume it works for DNS, so we set DNS Ready immediately
-            // or we could implement a self-test in UdpGwClient too.
-            // For now, let's mark ready.
-            setDnsReady(true)
         } else {
             udpGwClient = null
-            // Start the legacy DNS loop immediately if UDPGW is not used
-            dnsForwarder.start()
         }
     }
 
@@ -65,17 +62,13 @@ class Tun2Socks(
         if (protocol == Packet.PROTOCOL_UDP) {
             val dstPort = Packet.getUdpDstPort(buffer, ipHeaderLen)
 
-            if (enableUdpGw && udpGwClient != null) {
-                // Route ALL UDP through UDPGW
+            // DNS Priority: Intercept Port 53 and send via DnsForwarder (TCP)
+            if (dstPort == 53) {
+                val payloadLen = totalLen - ipHeaderLen - 8
+                dnsForwarder.processPacket(buffer, ipHeaderLen, 8, payloadLen)
+            } else if (enableUdpGw && udpGwClient != null) {
+                // Route other UDP through UDPGW
                 udpGwClient.processPacket(buffer, length)
-            } else {
-                // Legacy Mode: Only handle DNS
-                if (dstPort == 53) {
-                    // DNS: Pass to forwarder regardless of ready state (it handles its own connection)
-                    // But DnsForwarder checks if channel is open.
-                    val payloadLen = totalLen - ipHeaderLen - 8
-                    dnsForwarder.processPacket(buffer, ipHeaderLen, 8, payloadLen)
-                }
             }
         } else if (protocol == Packet.PROTOCOL_TCP) {
             val srcPort = Packet.getTcpSrcPort(buffer, ipHeaderLen)

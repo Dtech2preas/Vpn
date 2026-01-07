@@ -153,8 +153,8 @@ class DTechVpnService : VpnService() {
         builder.setSession("D-Tech VPN")
         builder.addAddress("10.0.0.2", 24)
         builder.addRoute("0.0.0.0", 0)
-        builder.addDnsServer("8.8.8.8")
-        builder.setMtu(1500)
+        builder.addDnsServer(dnsServer.ifEmpty { "8.8.8.8" })
+        builder.setMtu(1200)
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             builder.setMetered(false)
