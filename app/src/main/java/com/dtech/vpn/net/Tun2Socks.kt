@@ -48,6 +48,7 @@ class Tun2Socks(
     }
 
     fun processPacket(buffer: ByteBuffer, length: Int) {
+        logger("TUN: Packet received (len=$length)")
         rxPackets++
 
         // 1. Basic Parse

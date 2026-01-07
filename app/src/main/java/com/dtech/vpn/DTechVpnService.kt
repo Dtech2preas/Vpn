@@ -63,7 +63,7 @@ class DTechVpnService : VpnService() {
             val forceTls12 = intent.getBooleanExtra(EXTRA_FORCE_TLS_12, false)
             val udpgwEnabled = intent.getBooleanExtra(EXTRA_UDPGW_ENABLED, true)
             val udpgwPort = intent.getIntExtra(EXTRA_UDPGW_PORT, 7300)
-            val dnsServer = intent.getStringExtra(EXTRA_DNS_SERVER) ?: "8.8.8.8"
+            val dnsServer = intent.getStringExtra(EXTRA_DNS_SERVER) ?: "1.1.1.1"
 
             if (!isRunning.get()) {
                 startVpn(host, port, sni, payload, enableCamouflage, user, pass, forceTls12, udpgwEnabled, udpgwPort, dnsServer)
@@ -153,7 +153,7 @@ class DTechVpnService : VpnService() {
         builder.setSession("D-Tech VPN")
         builder.addAddress("10.0.0.2", 24)
         builder.addRoute("0.0.0.0", 0)
-        builder.addDnsServer(dnsServer.ifEmpty { "8.8.8.8" })
+        builder.addDnsServer(dnsServer.ifEmpty { "1.1.1.1" })
         builder.setMtu(1200)
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {

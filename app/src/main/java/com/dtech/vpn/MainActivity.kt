@@ -193,7 +193,7 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra(DTechVpnService.EXTRA_FORCE_TLS_12, forceTls12)
             intent.putExtra(DTechVpnService.EXTRA_UDPGW_ENABLED, enableUdpGw)
             intent.putExtra(DTechVpnService.EXTRA_UDPGW_PORT, udpGwPort)
-            intent.putExtra(DTechVpnService.EXTRA_DNS_SERVER, customDns.ifEmpty { "8.8.8.8" })
+            intent.putExtra(DTechVpnService.EXTRA_DNS_SERVER, customDns.ifEmpty { "1.1.1.1" })
             startService(intent)
         }
     }
