@@ -3,9 +3,8 @@ package com.dtech.vpn.net
 import com.jcraft.jsch.ChannelDirectTCPIP
 import com.jcraft.jsch.Session
 import java.io.DataInputStream
-import java.io.OutputStream
 import java.nio.ByteBuffer
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 
 class DnsForwarder(
@@ -14,87 +13,83 @@ class DnsForwarder(
     private val dnsServer: String,
     private val logger: (String) -> Unit
 ) {
-    private var channel: ChannelDirectTCPIP? = null
-    private var out: OutputStream? = null
-    private var inStream: DataInputStream? = null
-    private val pendingQueries = ConcurrentHashMap<Int, QueryMetadata>()
+    private val executor = Executors.newCachedThreadPool()
     private val transactionIdGen = AtomicInteger(1)
     private var isRunning = false
-    private val lock = Any()
-
-    data class QueryMetadata(
-        val srcIp: Int,
-        val srcPort: Int,
-        val dstIp: Int,
-        val dstPort: Int,
-        val originalId: Short
-    )
 
     fun start() {
         if (isRunning) return
         isRunning = true
-        Thread { connectAndLoop() }.start()
+
+        // Trigger self-test immediately
+        executor.submit {
+            try {
+                sendSelfTestQuery()
+            } catch (e: Exception) {
+                logger("DNS: Self-test failed: ${e.message}")
+            }
+        }
     }
 
     fun stop() {
         isRunning = false
-        closeChannel()
+        executor.shutdownNow()
     }
 
-    private fun connectAndLoop() {
-        while (isRunning && session.isConnected) {
-            try {
-                // Persistent connection logic
-                logger("DNS: Connecting persistent channel to $dnsServer:53...")
+    fun processPacket(buffer: ByteBuffer, ipHeaderLen: Int, udpHeaderLen: Int, payloadLen: Int) {
+        if (!isRunning || !session.isConnected) return
 
-                // Open Channel
-                val newChannel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
-                newChannel.setHost(dnsServer)
-                newChannel.setPort(53)
-                newChannel.connect(10000)
+        val srcIp = Packet.getIPSrcInt(buffer)
+        val dstIp = Packet.getIPDstInt(buffer)
+        val srcPort = Packet.getUdpSrcPort(buffer, ipHeaderLen)
+        val dstPort = Packet.getUdpDstPort(buffer, ipHeaderLen)
 
-                synchronized(lock) {
-                    channel = newChannel
-                    out = newChannel.outputStream
-                    inStream = DataInputStream(newChannel.inputStream)
-                }
+        // Extract DNS Query
+        val query = ByteArray(payloadLen)
+        buffer.position(ipHeaderLen + udpHeaderLen)
+        buffer.get(query)
 
-                logger("DNS: Channel opened.")
-
-                // Send self-test query asynchronously
-                sendSelfTestQuery()
-
-                // Response Reader Loop
-                val currentIn = inStream
-                while (isRunning && channel?.isConnected == true) {
-                    // Read Length (2 bytes)
-                    // If stream closes, this throws or returns EOF
-                    val len = try {
-                        currentIn?.readUnsignedShort() ?: -1
-                    } catch (e: Exception) { -1 }
-
-                    if (len <= 0) break
-
-                    // Read Payload
-                    val buffer = ByteArray(len)
-                    try {
-                        currentIn?.readFully(buffer)
-                        processResponse(buffer)
-                    } catch (e: Exception) {
-                        break
-                    }
-                }
-            } catch (e: Exception) {
-                logger("DNS Channel Error/Closed: ${e.message}")
-            } finally {
-                tun2Socks.setDnsReady(false)
-                closeChannel()
-                if (isRunning) {
-                     try { Thread.sleep(2000) } catch (_: Exception) {}
-                }
-            }
+        executor.submit {
+            handleQuery(srcIp, srcPort, dstIp, dstPort, query)
         }
-        logger("DNS: Handler stopped.")
+    }
+
+    private fun handleQuery(srcIp: Int, srcPort: Int, dstIp: Int, dstPort: Int, query: ByteArray) {
+        var channel: ChannelDirectTCPIP? = null
+        try {
+            // 1. Open new channel
+            channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
+            channel.setHost(dnsServer)
+            channel.setPort(53)
+            channel.connect(10000)
+
+            val out = channel.outputStream
+            val inStream = DataInputStream(channel.inputStream)
+
+            // 2. Send Query
+            val len = query.size
+            out.write((len shr 8) and 0xFF)
+            out.write(len and 0xFF)
+            out.write(query)
+            out.flush()
+            logger("DNS: Query sent (len=$len)")
+
+            // 3. Read Response
+            val respLen = inStream.readUnsignedShort()
+            if (respLen > 0) {
+                val response = ByteArray(respLen)
+                inStream.readFully(response)
+                logger("DNS: Response received")
+
+                // 4. Send back to TUN
+                sendResponseToTun(srcIp, srcPort, dstIp, dstPort, response)
+            }
+
+        } catch (e: Exception) {
+            logger("DNS Query Failed: ${e.message}")
+        } finally {
+            try { channel?.disconnect() } catch (_: Exception) {}
+        }
     }
 
     private fun sendSelfTestQuery() {
@@ -116,98 +111,43 @@ class DnsForwarder(
             // QCLASS: IN (1)
             0x00, 0x01
         )
-        sendOverTcp(query)
-    }
 
-    private fun closeChannel() {
-        try { out?.close() } catch (_: Exception) {}
-        try { inStream?.close() } catch (_: Exception) {}
-        try { channel?.disconnect() } catch (_: Exception) {}
-        channel = null
-    }
+        var channel: ChannelDirectTCPIP? = null
+        try {
+            channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
+            channel.setHost(dnsServer)
+            channel.setPort(53)
+            channel.connect(10000)
 
-    fun processPacket(buffer: ByteBuffer, ipHeaderLen: Int, udpHeaderLen: Int, payloadLen: Int) {
-        if (channel == null || !channel!!.isConnected) {
-            // Drop packet if DNS is down
-            return
-        }
+            val out = channel.outputStream
+            val inStream = DataInputStream(channel.inputStream)
 
-        val srcIp = Packet.getIPSrcInt(buffer)
-        val dstIp = Packet.getIPDstInt(buffer)
-        val srcPort = Packet.getUdpSrcPort(buffer, ipHeaderLen)
-        val dstPort = Packet.getUdpDstPort(buffer, ipHeaderLen)
+            val len = query.size
+            out.write((len shr 8) and 0xFF)
+            out.write(len and 0xFF)
+            out.write(query)
+            out.flush()
 
-        // Extract DNS Query
-        val query = ByteArray(payloadLen)
-        buffer.position(ipHeaderLen + udpHeaderLen)
-        buffer.get(query)
+            val respLen = inStream.readUnsignedShort()
+            if (respLen > 0) {
+                val response = ByteArray(respLen)
+                inStream.readFully(response)
 
-        // 1. Extract Original ID
-        val originalId = getShort(query, 0)
-
-        // 2. Generate New ID (Ensure it doesn't conflict with our test ID 0)
-        var newId = transactionIdGen.getAndIncrement() and 0xFFFF
-        if (newId == 0) {
-            newId = transactionIdGen.getAndIncrement() and 0xFFFF
-        }
-
-        // 3. Store Mapping
-        pendingQueries[newId] = QueryMetadata(srcIp, srcPort, dstIp, dstPort, originalId)
-
-        // 4. Rewrite ID in query
-        setShort(query, 0, newId.toShort())
-
-        // 5. Send over TCP
-        sendOverTcp(query)
-    }
-
-    private fun sendOverTcp(query: ByteArray) {
-        synchronized(lock) {
-            try {
-                if (out != null) {
-                    val len = query.size
-                    out?.write((len shr 8) and 0xFF)
-                    out?.write(len and 0xFF)
-                    out?.write(query)
-                    out?.flush()
-                    logger("DNS: Query sent (len=${query.size})")
+                // Check if ID is 0
+                val id = getShort(response, 0).toInt() and 0xFFFF
+                if (id == 0) {
+                    logger("DNS: Self-test passed. Ready.")
+                    tun2Socks.setDnsReady(true)
                 }
-            } catch (e: Exception) {
-                logger("DNS: Send failed: ${e.message}")
-                closeChannel()
             }
+        } catch (e: Exception) {
+            logger("DNS Self-Test Failed: ${e.message}")
+        } finally {
+            try { channel?.disconnect() } catch (_: Exception) {}
         }
     }
 
-    private fun processResponse(response: ByteArray) {
-        if (response.size < 2) return
-
-        // 1. Extract ID
-        val id = getShort(response, 0).toInt() and 0xFFFF
-
-        // Check for self-test ID (0)
-        if (id == 0) {
-            logger("DNS: Self-test passed. Ready.")
-            tun2Socks.setDnsReady(true)
-            return
-        }
-
-        // 2. Lookup Mapping
-        val meta = pendingQueries.remove(id)
-        if (meta == null) {
-            return
-        }
-
-        logger("DNS: Response received")
-
-        // 3. Restore Original ID
-        setShort(response, 0, meta.originalId)
-
-        // 4. Construct UDP Packet and inject to Tun
-        sendResponseToTun(meta, response)
-    }
-
-    private fun sendResponseToTun(meta: QueryMetadata, response: ByteArray) {
+    private fun sendResponseToTun(srcIp: Int, srcPort: Int, dstIp: Int, dstPort: Int, response: ByteArray) {
         val totalLen = 20 + 8 + response.size // IP + UDP + Data
         val buffer = ByteBuffer.allocate(totalLen)
 
@@ -222,29 +162,24 @@ class DnsForwarder(
         buffer.putShort(10, 0.toShort()) // Checksum placeholder
 
         // Swap Src/Dst for response
-        buffer.putInt(12, meta.dstIp) // Server IP
-        buffer.putInt(16, meta.srcIp) // Client IP
+        buffer.putInt(12, dstIp) // Server IP
+        buffer.putInt(16, srcIp) // Client IP
         Packet.updateIPChecksum(buffer, 0, 20)
 
         // UDP Header
-        buffer.putShort(20, meta.dstPort.toShort())
-        buffer.putShort(22, meta.srcPort.toShort())
+        buffer.putShort(20, dstPort.toShort())
+        buffer.putShort(22, srcPort.toShort())
         buffer.putShort(24, (8 + response.size).toShort())
         buffer.putShort(26, 0.toShort()) // Checksum
 
         buffer.position(28)
         buffer.put(response)
 
-        Packet.calculateUDPChecksum(buffer, 20, totalLen, meta.dstIp, meta.srcIp)
+        Packet.calculateUDPChecksum(buffer, 20, totalLen, dstIp, srcIp)
         tun2Socks.writePacket(buffer, totalLen)
     }
 
     private fun getShort(b: ByteArray, off: Int): Short {
         return (((b[off].toInt() and 0xFF) shl 8) or (b[off + 1].toInt() and 0xFF)).toShort()
-    }
-
-    private fun setShort(b: ByteArray, off: Int, value: Short) {
-        b[off] = ((value.toInt() shr 8) and 0xFF).toByte()
-        b[off + 1] = (value.toInt() and 0xFF).toByte()
     }
 }

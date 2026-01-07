@@ -117,6 +117,7 @@ class Tun2Socks(
     fun writePacket(buffer: ByteBuffer, length: Int) {
         synchronized(vpnOutput) {
             try {
+                logger("TUN: Packet written (len=$length)")
                 vpnOutput.write(buffer.array(), 0, length)
                 txPackets++
             } catch (e: Exception) {
