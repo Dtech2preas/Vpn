@@ -14,7 +14,8 @@ import kotlin.math.min
  */
 class WebSocketInputStream(
     private val inner: InputStream,
-    private val logger: (String) -> Unit = {}
+    private val logger: (String) -> Unit = {},
+    private val onRawModeDetected: () -> Unit = {}
 ) : InputStream() {
     private var buffer: ByteArray = ByteArray(0)
     private var bufferPos = 0
@@ -100,6 +101,7 @@ class WebSocketInputStream(
 
             isRawMode = true
             logger("Detected raw SSH Banner (SSH-). Switching to Raw Mode (Bypassing WebSocket Reads).")
+            onRawModeDetected()
         } else {
             isRawMode = false
             // logger("Sniffed ${headerBufferLen} bytes. No SSH banner detected. Continuing with WebSocket.")
@@ -277,12 +279,30 @@ class WebSocketOutputStream(
 ) : OutputStream() {
     private val random = SecureRandom()
     private val maskKey = ByteArray(4)
+    private var isRawMode = false
+
+    fun setRawMode(enabled: Boolean) {
+        if (isRawMode != enabled) {
+            isRawMode = enabled
+            logger("WebSocketOutputStream: Raw Mode set to $enabled")
+        }
+    }
 
     override fun write(b: Int) {
+        if (isRawMode) {
+            inner.write(b)
+            return
+        }
         write(byteArrayOf(b.toByte()), 0, 1)
     }
 
     override fun write(b: ByteArray, off: Int, len: Int) {
+        if (isRawMode) {
+            inner.write(b, off, len)
+            inner.flush()
+            return
+        }
+
         // Frame format:
         // Byte 0: 1000 0010 (Fin=1, Binary=0x2)
         inner.write(0x82)
