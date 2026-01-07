@@ -37,6 +37,9 @@ class SshTlsTunnel(
 
     private var session: Session? = null
     private var sslSocket: SSLSocket? = null
+    private var isWebSocket = false
+    private var wsIn: InputStream? = null
+    private var wsOut: OutputStream? = null
 
     fun connect() {
         val jsch = JSch()
@@ -57,10 +60,16 @@ class SshTlsTunnel(
             }
 
             override fun getInputStream(socket: Socket?): InputStream {
+                if (isWebSocket && wsIn != null) {
+                    return wsIn!!
+                }
                 return socket!!.inputStream
             }
 
             override fun getOutputStream(socket: Socket?): OutputStream {
+                if (isWebSocket && wsOut != null) {
+                    return wsOut!!
+                }
                 return socket!!.outputStream
             }
         })
@@ -162,7 +171,12 @@ class SshTlsTunnel(
              // We need to consume the HTTP headers until the empty line before handing off to JSch.
              // However, JSch is strict. If it sees "HTTP/1.1 101...", it might fail or it might tolerate it if it finds "SSH-" later.
              // Standard practice in these tools is to strip the HTTP response.
-             consumeHttpResponse(socket.inputStream)
+             if (checkAndConsumeHttpResponse(socket.inputStream)) {
+                 logger("Switching to WebSocket Framing Mode.")
+                 isWebSocket = true
+                 wsIn = WebSocketInputStream(socket.inputStream)
+                 wsOut = WebSocketOutputStream(socket.outputStream)
+             }
         } else {
             logger("Payload skipped (Direct SSL/TLS Mode).")
         }
@@ -170,7 +184,7 @@ class SshTlsTunnel(
         return socket
     }
 
-    private fun consumeHttpResponse(input: InputStream) {
+    private fun checkAndConsumeHttpResponse(input: InputStream): Boolean {
         // Simple state machine to read until \r\n\r\n
         // This is a naive implementation but sufficient for this context.
         logger("Reading HTTP Response...")
@@ -188,12 +202,20 @@ class SshTlsTunnel(
             // A simple way is to check the end of the StringBuilder
             if (buffer.endsWith("\r\n\r\n")) {
                 logger("HTTP Response Header received (Length: ${buffer.length})")
-                // logger("Header: $buffer") // Debug only
-                return
+
+                val header = buffer.toString()
+                // Status line is the first line: HTTP/1.1 101 Switching Protocols
+                val statusLine = header.lines().firstOrNull()
+                if (statusLine != null && statusLine.contains(" 101 ")) {
+                    logger("Server accepted WebSocket Upgrade (HTTP 101).")
+                    return true
+                }
+                return false
             }
             count++
         }
         logger("Warning: HTTP Response header too large or not found. Passing stream to JSch anyway.")
+        return false
     }
 
     fun isConnected(): Boolean {
