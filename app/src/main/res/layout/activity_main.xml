@@ -166,7 +166,7 @@
                 android:textColorHint="#AAAAAA"
                 android:inputType="textUri"
                 android:backgroundTint="#6200EE"
-                android:text="8.8.8.8" />
+                android:text="1.1.1.1" />
 
             <Button
                 android:id="@+id/btnConnect"
