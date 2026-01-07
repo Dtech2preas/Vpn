@@ -24,18 +24,24 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Download Tun2Socks Native Library (ARM64 & ARM32)
+    - name: Download and Extract Tun2Socks Libs
       run: |
+        # Create directories
         mkdir -p app/src/main/jniLibs/arm64-v8a/
         mkdir -p app/src/main/jniLibs/armeabi-v7a/
 
-        # Download ARM64
-        wget -O app/src/main/jniLibs/arm64-v8a/libtun2socks.so \
-        https://github.com/heiher/hev-socks5-tunnel/releases/download/2.6.5/hev-socks5-tunnel-arm64-v8a.so
+        # Download APK
+        wget -O temp_vpn.apk https://github.com/heiher/sockstun/releases/download/6.0/hev.sockstun-6.0-release.apk
 
-        # Download ARM32
-        wget -O app/src/main/jniLibs/armeabi-v7a/libtun2socks.so \
-        https://github.com/heiher/hev-socks5-tunnel/releases/download/2.6.5/hev-socks5-tunnel-armeabi-v7a.so
+        # Extract .so files directly to destination
+        unzip -p temp_vpn.apk lib/arm64-v8a/libtun2socks.so > app/src/main/jniLibs/arm64-v8a/libtun2socks.so
+        unzip -p temp_vpn.apk lib/armeabi-v7a/libtun2socks.so > app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+
+        # Cleanup
+        rm temp_vpn.apk
+
+        # Verify
+        ls -R app/src/main/jniLibs/
 
     - name: Build with Gradle
       run: ./gradlew assembleDebug
