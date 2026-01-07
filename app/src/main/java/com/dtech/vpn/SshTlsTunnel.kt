@@ -182,10 +182,13 @@ class SshTlsTunnel(
                  wsOut = wsOutLocal
 
                  // Pass callback to switch output mode if raw banner detected
-                 wsIn = WebSocketInputStream(socket.inputStream, logger) {
-                     // Callback: Detected Raw SSH
-                     wsOutLocal.setRawMode(true)
-                     try { Thread.sleep(150) } catch (e: Exception) {}
+                 // The callback now receives a boolean: true = Raw, false = WebSocket
+                 wsIn = WebSocketInputStream(socket.inputStream, logger) { isRaw ->
+                     // Callback: Protocol Detected
+                     wsOutLocal.determineMode(isRaw)
+                     if (isRaw) {
+                        try { Thread.sleep(150) } catch (e: Exception) {}
+                     }
                  }
              }
         } else {
