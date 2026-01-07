@@ -30,6 +30,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etUsername: EditText
     private lateinit var etPassword: EditText
     private lateinit var cbForceTls12: CheckBox
+    private lateinit var cbEnableUdpGw: CheckBox
+    private lateinit var etUdpGwPort: EditText
+    private lateinit var etCustomDns: EditText
     private lateinit var btnConnect: Button
     private lateinit var btnCopyLogs: Button
     private lateinit var btnClearLogs: Button
@@ -66,6 +69,9 @@ class MainActivity : AppCompatActivity() {
         etUsername = findViewById(R.id.etUsername)
         etPassword = findViewById(R.id.etPassword)
         cbForceTls12 = findViewById(R.id.cbForceTls12)
+        cbEnableUdpGw = findViewById(R.id.cbEnableUdpGw)
+        etUdpGwPort = findViewById(R.id.etUdpGwPort)
+        etCustomDns = findViewById(R.id.etCustomDns)
         btnConnect = findViewById(R.id.btnConnect)
         btnCopyLogs = findViewById(R.id.btnCopyLogs)
         btnClearLogs = findViewById(R.id.btnClearLogs)
@@ -148,6 +154,9 @@ class MainActivity : AppCompatActivity() {
             val username = etUsername.text.toString().trim()
             val password = etPassword.text.toString().trim()
             val forceTls12 = cbForceTls12.isChecked
+            val enableUdpGw = cbEnableUdpGw.isChecked
+            val udpGwPortStr = etUdpGwPort.text.toString().trim()
+            val customDns = etCustomDns.text.toString().trim()
 
             if (host.isEmpty() || portStr.isEmpty() || username.isEmpty() || password.isEmpty()) {
                 Toast.makeText(this, "Server, Port, User, and Pass are required", Toast.LENGTH_SHORT).show()
@@ -166,6 +175,12 @@ class MainActivity : AppCompatActivity() {
                 22
             }
 
+            val udpGwPort = try {
+                udpGwPortStr.toInt()
+            } catch (e: NumberFormatException) {
+                7300
+            }
+
             val intent = Intent(this, DTechVpnService::class.java)
             intent.action = DTechVpnService.ACTION_CONNECT
             intent.putExtra(DTechVpnService.EXTRA_HOST, host)
@@ -176,6 +191,9 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra(DTechVpnService.EXTRA_USERNAME, username)
             intent.putExtra(DTechVpnService.EXTRA_PASSWORD, password)
             intent.putExtra(DTechVpnService.EXTRA_FORCE_TLS_12, forceTls12)
+            intent.putExtra(DTechVpnService.EXTRA_UDPGW_ENABLED, enableUdpGw)
+            intent.putExtra(DTechVpnService.EXTRA_UDPGW_PORT, udpGwPort)
+            intent.putExtra(DTechVpnService.EXTRA_DNS_SERVER, customDns.ifEmpty { "8.8.8.8" })
             startService(intent)
         }
     }

@@ -9,11 +9,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 class Tun2Socks(
     private val session: Session,
     private val vpnOutput: FileOutputStream,
+    private val enableUdpGw: Boolean,
+    private val udpGwPort: Int,
+    private val dnsServer: String,
     private val logger: (String) -> Unit
 ) {
 
     private val connections = ConcurrentHashMap<String, TcpConn>()
-    private val dnsForwarder = DnsForwarder(this, session, logger)
+    private val dnsForwarder = DnsForwarder(this, session, dnsServer, logger)
+    private val udpGwClient: UdpGwClient?
     private val isDnsReady = AtomicBoolean(false)
 
     // Packet counters for stats
@@ -25,8 +29,18 @@ class Tun2Socks(
     }
 
     init {
-        // Start the DNS loop immediately
-        dnsForwarder.start()
+        if (enableUdpGw) {
+            udpGwClient = UdpGwClient(this, session, udpGwPort, dnsServer, logger)
+            udpGwClient.start()
+            // If UDPGW is enabled, we assume it works for DNS, so we set DNS Ready immediately
+            // or we could implement a self-test in UdpGwClient too.
+            // For now, let's mark ready.
+            setDnsReady(true)
+        } else {
+            udpGwClient = null
+            // Start the legacy DNS loop immediately if UDPGW is not used
+            dnsForwarder.start()
+        }
     }
 
     fun setDnsReady(ready: Boolean) {
@@ -50,12 +64,18 @@ class Tun2Socks(
 
         if (protocol == Packet.PROTOCOL_UDP) {
             val dstPort = Packet.getUdpDstPort(buffer, ipHeaderLen)
-            val payloadLen = totalLen - ipHeaderLen - 8
 
-            if (dstPort == 53) {
-                // DNS: Pass to forwarder regardless of ready state (it handles its own connection)
-                // But DnsForwarder checks if channel is open.
-                dnsForwarder.processPacket(buffer, ipHeaderLen, 8, payloadLen)
+            if (enableUdpGw && udpGwClient != null) {
+                // Route ALL UDP through UDPGW
+                udpGwClient.processPacket(buffer, length)
+            } else {
+                // Legacy Mode: Only handle DNS
+                if (dstPort == 53) {
+                    // DNS: Pass to forwarder regardless of ready state (it handles its own connection)
+                    // But DnsForwarder checks if channel is open.
+                    val payloadLen = totalLen - ipHeaderLen - 8
+                    dnsForwarder.processPacket(buffer, ipHeaderLen, 8, payloadLen)
+                }
             }
         } else if (protocol == Packet.PROTOCOL_TCP) {
             val srcPort = Packet.getTcpSrcPort(buffer, ipHeaderLen)
@@ -118,6 +138,7 @@ class Tun2Socks(
 
     fun close() {
         dnsForwarder.stop()
+        udpGwClient?.stop()
         // Close all TCP connections
         connections.values.forEach { it.close() }
         connections.clear()
