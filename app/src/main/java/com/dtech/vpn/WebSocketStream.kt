@@ -48,93 +48,95 @@ class WebSocketInputStream(
      * Returns true if a frame with payload was read, false on EOF or Close.
      */
     private fun readNextFrame(): Boolean {
-        // Clear buffer
-        buffer = ByteArray(0)
-        bufferPos = 0
+        while (true) {
+            // Clear buffer
+            buffer = ByteArray(0)
+            bufferPos = 0
 
-        // 1. Read first byte (FIN, RSV, Opcode)
-        val b1 = inner.read()
-        if (b1 == -1) {
-            logger("WebSocket EOF reading first byte")
-            return false
-        }
+            // 1. Read first byte (FIN, RSV, Opcode)
+            val b1 = inner.read()
+            if (b1 == -1) {
+                logger("WebSocket EOF reading first byte")
+                return false
+            }
 
-        // val fin = (b1 and 0x80) != 0
-        val opcode = b1 and 0x0F
-        // logger("WS Opcode: $opcode")
+            // val fin = (b1 and 0x80) != 0
+            val opcode = b1 and 0x0F
+            // logger("WS Opcode: $opcode")
 
-        // 2. Read second byte (Mask, Payload Len)
-        val b2 = inner.read()
-        if (b2 == -1) {
-            logger("WebSocket EOF reading second byte")
-            return false
-        }
+            // 2. Read second byte (Mask, Payload Len)
+            val b2 = inner.read()
+            if (b2 == -1) {
+                logger("WebSocket EOF reading second byte")
+                return false
+            }
 
-        val masked = (b2 and 0x80) != 0
-        var payloadLen = (b2 and 0x7F).toLong()
+            val masked = (b2 and 0x80) != 0
+            var payloadLen = (b2 and 0x7F).toLong()
 
-        // 3. Read extended payload length if needed
-        if (payloadLen == 126L) {
-            val b3 = inner.read()
-            val b4 = inner.read()
-            if (b3 == -1 || b4 == -1) return false
-            payloadLen = ((b3 shl 8) or b4).toLong()
-        } else if (payloadLen == 127L) {
-            // 8 bytes length (only support reasonable sizes)
-            // We ignore the high 4 bytes for simplicity as we can't allocate arrays that big anyway
-            for (i in 0 until 4) inner.read() // Skip high bytes
-            val bLow = ByteArray(4)
-            if (readFull(bLow) < 4) return false
-            payloadLen = (((bLow[0].toInt() and 0xFF) shl 24) or
-                          ((bLow[1].toInt() and 0xFF) shl 16) or
-                          ((bLow[2].toInt() and 0xFF) shl 8) or
-                          (bLow[3].toInt() and 0xFF)).toLong()
-        }
+            // 3. Read extended payload length if needed
+            if (payloadLen == 126L) {
+                val b3 = inner.read()
+                val b4 = inner.read()
+                if (b3 == -1 || b4 == -1) return false
+                payloadLen = ((b3 shl 8) or b4).toLong()
+            } else if (payloadLen == 127L) {
+                // 8 bytes length (only support reasonable sizes)
+                // We ignore the high 4 bytes for simplicity as we can't allocate arrays that big anyway
+                for (i in 0 until 4) inner.read() // Skip high bytes
+                val bLow = ByteArray(4)
+                if (readFull(bLow) < 4) return false
+                payloadLen = (((bLow[0].toInt() and 0xFF) shl 24) or
+                              ((bLow[1].toInt() and 0xFF) shl 16) or
+                              ((bLow[2].toInt() and 0xFF) shl 8) or
+                              (bLow[3].toInt() and 0xFF)).toLong()
+            }
 
-        // 4. Read Masking Key (if masked)
-        if (masked) {
-            if (readFull(maskKey) < 4) return false
-        }
+            // 4. Read Masking Key (if masked)
+            if (masked) {
+                if (readFull(maskKey) < 4) return false
+            }
 
-        // Handle Control Frames (Ping/Pong/Close)
-        // Opcode 0x8 (Close), 0x9 (Ping), 0xA (Pong)
-        if (opcode == 0x8) {
-             logger("WebSocket Close Frame received")
-             return false // Close
-        }
+            // Handle Control Frames (Ping/Pong/Close) and Unknowns
+            // Opcode 0x8 (Close), 0x9 (Ping), 0xA (Pong)
 
-        // We ignore Ping/Pong payload for now or handle them?
-        // If it's a control frame, we should theoretically process it and read the next frame.
-        // But for this specific SSH tunnel use-case, usually we just see Binary frames (0x2).
-        // If we get a Ping, we should read the payload and discard it, then recurse.
-        if (opcode != 0x0 && opcode != 0x1 && opcode != 0x2) {
-             // Skip payload
-             logger("Skipping control frame or unknown opcode: $opcode, len: $payloadLen")
-             skipBytes(payloadLen)
-             return readNextFrame()
-        }
+            if (opcode == 0x8) {
+                 logger("WebSocket Close Frame received")
+                 return false // Close
+            }
 
-        // 5. Read Payload
-        if (payloadLen > Int.MAX_VALUE - 8) {
-            throw IOException("Frame too large: $payloadLen")
-        }
-        val len = payloadLen.toInt()
-        val payload = ByteArray(len)
-        if (readFull(payload) < len) {
-            logger("WebSocket EOF reading payload")
-            return false
-        }
+            // Check for Data Frames (Text=0x1, Binary=0x2)
+            // Note: We currently treat 0x0 (Continuation) as something to skip or invalid for start of message
+            if (opcode == 0x1 || opcode == 0x2) {
+                // 5. Read Payload
+                if (payloadLen > Int.MAX_VALUE - 8) {
+                    throw IOException("Frame too large: $payloadLen")
+                }
+                val len = payloadLen.toInt()
+                val payload = ByteArray(len)
+                if (readFull(payload) < len) {
+                    logger("WebSocket EOF reading payload")
+                    return false
+                }
 
-        // 6. Unmask if needed
-        if (masked) {
-            for (i in 0 until len) {
-                payload[i] = (payload[i].toInt() xor maskKey[i % 4].toInt()).toByte()
+                // 6. Unmask if needed
+                if (masked) {
+                    for (i in 0 until len) {
+                        payload[i] = (payload[i].toInt() xor maskKey[i % 4].toInt()).toByte()
+                    }
+                }
+
+                buffer = payload
+                bufferPos = 0
+                return true
+            } else {
+                // Control frame (0x9, 0xA) or Unknown opcode (e.g. 0x3)
+                // Skip payload and continue loop
+                logger("Skipping control frame or unknown opcode: $opcode, len: $payloadLen")
+                skipBytes(payloadLen)
+                // Loop continues to read next frame
             }
         }
-
-        buffer = payload
-        bufferPos = 0
-        return true
     }
 
     private fun readFull(buf: ByteArray): Int {
