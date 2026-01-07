@@ -1,5 +1,6 @@
 package com.dtech.vpn.net
 
+import android.util.Log
 import com.jcraft.jsch.ChannelDirectTCPIP
 import com.jcraft.jsch.Session
 import java.io.DataInputStream
@@ -14,19 +15,38 @@ class DnsForwarder(
     private val logger: (String) -> Unit
 ) {
     private val executor = Executors.newCachedThreadPool()
-    private val transactionIdGen = AtomicInteger(1)
-    private var isRunning = false
+    @Volatile private var isRunning = false
 
     fun start() {
         if (isRunning) return
         isRunning = true
 
-        // Trigger self-test immediately
+        // Trigger self-test loop
         executor.submit {
-            try {
-                sendSelfTestQuery()
-            } catch (e: Exception) {
-                logger("DNS: Self-test failed: ${e.message}")
+            var attempt = 0
+            while (isRunning) {
+                attempt++
+                try {
+                    if (sendSelfTestQuery()) {
+                        logger("DNS: Self-test passed on attempt $attempt. Ready.")
+                        tun2Socks.setDnsReady(true)
+                        break
+                    } else {
+                        if (attempt % 5 == 0) logger("DNS: Self-test failed (Attempt $attempt). Retrying...")
+                    }
+                } catch (e: Exception) {
+                    logger("DNS: Self-test error (Attempt $attempt): ${e.message}")
+                    // Log stack trace only for the first few failures to avoid log spam, or if it's the specific "null" error
+                    if (attempt <= 3 || e.message == null) {
+                        logger(Log.getStackTraceString(e))
+                    }
+                }
+
+                try {
+                    Thread.sleep(3000)
+                } catch (e: InterruptedException) {
+                    break
+                }
             }
         }
     }
@@ -38,7 +58,7 @@ class DnsForwarder(
 
     fun processPacket(buffer: ByteBuffer, ipHeaderLen: Int, udpHeaderLen: Int, payloadLen: Int) {
         if (!isRunning || !session.isConnected) {
-            logger("DNS DROP: Forwarder not running or Session disconnected. Running=$isRunning, Connected=${session.isConnected}")
+            // logger("DNS DROP: ...") // Reduce spam
             return
         }
 
@@ -87,14 +107,14 @@ class DnsForwarder(
             out.write(len and 0xFF)
             out.write(query)
             out.flush()
-            logger("DNS: Query sent (len=$len)")
+            // logger("DNS: Query sent (len=$len)") // Verbose
 
             // 3. Read Response
             val respLen = inStream.readUnsignedShort()
             if (respLen > 0) {
                 val response = ByteArray(respLen)
                 inStream.readFully(response)
-                logger("DNS: Response received")
+                // logger("DNS: Response received") // Verbose
 
                 // 4. Send back to TUN
                 sendResponseToTun(srcIp, srcPort, dstIp, dstPort, response)
@@ -107,7 +127,7 @@ class DnsForwarder(
         }
     }
 
-    private fun sendSelfTestQuery() {
+    private fun sendSelfTestQuery(): Boolean {
         // ID = 0 for self-test
         val query = byteArrayOf(
             // Header
@@ -159,15 +179,15 @@ class DnsForwarder(
                 // Check if ID is 0
                 val id = getShort(response, 0).toInt() and 0xFFFF
                 if (id == 0) {
-                    logger("DNS: Self-test passed. Ready.")
-                    tun2Socks.setDnsReady(true)
+                    return true
                 }
             }
         } catch (e: Exception) {
-            logger("DNS Self-Test Failed: ${e.message}")
+            throw e // Re-throw to be logged by caller
         } finally {
             try { channel?.disconnect() } catch (_: Exception) {}
         }
+        return false
     }
 
     private fun sendResponseToTun(srcIp: Int, srcPort: Int, dstIp: Int, dstPort: Int, response: ByteArray) {
