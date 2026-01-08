@@ -12,7 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import hev.sockstun.TProxyService
+import hev.sockstun.Tun2Socks
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -193,8 +193,11 @@ class DTechVpnService : VpnService() {
 
         // We need the raw file descriptor as an Int for the native library
         // detachFd() returns the FD and closes the Java object, passing ownership to native.
-        val vpnFd = vpnInterface?.fd ?: -1
+        // CRITICAL: We detach the FD so Java doesn't auto-close it when the object is GC'd.
+        val vpnFd = vpnInterface?.detachFd() ?: -1
+
         if (vpnFd == -1) {
+             log("Failed to detach FD.")
              tunnel?.close()
              return
         }
@@ -205,24 +208,29 @@ class DTechVpnService : VpnService() {
             val configFile = File(cacheDir, "tproxy.conf")
             createConfig(configFile, 10808)
 
+            // Fix permissions
+            configFile.setReadable(true, false)
+
             log("Generated Tun2Socks config at: ${configFile.absolutePath}")
 
             // Start the native transparent proxy
-            // fd: The TUN interface file descriptor
-            // config_path: Path to the configuration file
-            TProxyService.TProxyStartService(configFile.absolutePath, vpnFd)
+            // fd: The TUN interface file descriptor (Raw Integer)
+            // Tun2Socks.run blocks until it finishes.
+            val result = Tun2Socks.run(configFile.absolutePath, vpnFd)
 
-            // TProxyStartService blocks until TProxyStopService() is called or error
-            log("Tun2Socks has stopped.")
+            log("Tun2Socks native exited with code: $result")
         } catch (e: Exception) {
             log("Tun2Socks Native Error: ${e.message}")
             e.printStackTrace()
         } finally {
             log("VPN Loop Finished")
-            TProxyService.TProxyStopService()
+            // We do NOT close vpnFd here because ownership was transferred to Native.
             try {
-                tunnel.close()
+                tunnel?.close()
             } catch (e: Exception) {}
+
+            // Clean up reference
+            vpnInterface = null
         }
     }
 

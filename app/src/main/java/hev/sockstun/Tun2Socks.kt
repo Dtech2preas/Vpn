@@ -1,6 +1,6 @@
 package hev.sockstun
 
-class TProxyService {
+class Tun2Socks {
     companion object {
         init {
             try {
@@ -11,12 +11,6 @@ class TProxyService {
         }
 
         @JvmStatic
-        external fun TProxyStartService(configPath: String, fd: Int)
-
-        @JvmStatic
-        external fun TProxyStopService()
-
-        @JvmStatic
-        external fun TProxyGetStats(): LongArray
+        external fun run(configPath: String, fd: Int): Int
     }
 }
