@@ -193,7 +193,7 @@ class DTechVpnService : VpnService() {
 
         // We need the raw file descriptor as an Int for the native library
         // detachFd() returns the FD and closes the Java object, passing ownership to native.
-        val vpnFd = vpnInterface?.fd ?: -1
+        val vpnFd = vpnInterface?.detachFd() ?: -1
         if (vpnFd == -1) {
              tunnel?.close()
              return
