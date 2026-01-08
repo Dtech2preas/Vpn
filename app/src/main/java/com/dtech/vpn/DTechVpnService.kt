@@ -12,7 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import hev.socks5.tunnel.Tun2Socks
+import hev.sockstun.Tun2Socks
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 

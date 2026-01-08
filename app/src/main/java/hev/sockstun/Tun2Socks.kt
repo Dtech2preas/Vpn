@@ -1,4 +1,4 @@
-package hev.socks5.tunnel
+package hev.sockstun
 
 object Tun2Socks {
     init {
