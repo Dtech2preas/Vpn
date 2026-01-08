@@ -193,7 +193,7 @@ class DTechVpnService : VpnService() {
 
         // We need the raw file descriptor as an Int for the native library
         // detachFd() returns the FD and closes the Java object, passing ownership to native.
-        val vpnFd = vpnInterface?.fd ?: -1
+        val vpnFd = vpnInterface?.detachFd() ?: -1
         if (vpnFd == -1) {
              tunnel?.close()
              return
@@ -219,6 +219,22 @@ class DTechVpnService : VpnService() {
             e.printStackTrace()
         } finally {
             log("VPN Loop Finished")
+
+            // Read native logs if they exist
+            val logFile = File(cacheDir, "tun2socks.log")
+            if (logFile.exists()) {
+                log("--- End Native Logs ---")
+                try {
+                    logFile.readLines().forEach { log(it) }
+                    // Clean up log file
+                    logFile.delete()
+                } catch (e: Exception) {
+                    log("Failed to read native logs: ${e.message}")
+                }
+            } else {
+                 log("No native logs found.")
+            }
+
             TProxyService.TProxyStopService()
             try {
                 tunnel.close()
@@ -227,6 +243,7 @@ class DTechVpnService : VpnService() {
     }
 
     private fun createConfig(configFile: File, socksPort: Int) {
+        val logFile = File(cacheDir, "tun2socks.log").absolutePath
         // CRITICAL: The 'udp: udp' line is mandatory for this library version.
         val configContent = """
             tunnel:
@@ -238,6 +255,9 @@ class DTechVpnService : VpnService() {
               port: $socksPort
               address: 127.0.0.1
               udp: udp
+            misc:
+              log-level: debug
+              log-file: $logFile
         """.trimIndent()
 
         configFile.writeText(configContent)
