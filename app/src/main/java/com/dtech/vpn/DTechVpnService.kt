@@ -12,7 +12,9 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import hev.socks5.tunnel.Tun2Socks
+import hev.sockstun.TProxyService
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -199,21 +201,40 @@ class DTechVpnService : VpnService() {
 
         log("Starting Tun2Socks Native...")
         try {
-            // Start the native transparent proxy
-            // vpnFd: The TUN interface
-            // proxyUrl: The local SOCKS5 server we just started in SSH
-            // netFd: 0 (Let the library protect the socket automatically or we handle it via SSH)
-            // dns: The user's custom DNS
-            // mtu: 1050 (Safe MTU)
-            Tun2Socks.Start(vpnFd, "socks5://127.0.0.1:10808", 0, dnsServer.ifEmpty { "1.1.1.1" }, 1050)
+            // Generate config file for Tun2Socks
+            val configFile = File(cacheDir, "tproxy.conf")
+            val configContent = StringBuilder()
 
-            // Tun2Socks.Start blocks until Tun2Socks.Stop() is called or error
+            // Basic settings
+            configContent.append("misc:\n")
+            configContent.append("  task-stack-size: 24576\n")
+            configContent.append("tunnel:\n")
+            configContent.append("  mtu: 1050\n")
+
+            // SOCKS5 settings - pointing to our local SSH tunnel
+            configContent.append("socks5:\n")
+            configContent.append("  port: 10808\n")
+            configContent.append("  address: '127.0.0.1'\n")
+            configContent.append("  udp: 'tcp'\n") // Tunnel UDP over TCP
+
+            // Write config to file
+            FileOutputStream(configFile).use { it.write(configContent.toString().toByteArray()) }
+
+            log("Generated Tun2Socks config at: ${configFile.absolutePath}")
+
+            // Start the native transparent proxy
+            // fd: The TUN interface file descriptor
+            // config_path: Path to the configuration file
+            TProxyService.TProxyStartService(configFile.absolutePath, vpnFd)
+
+            // TProxyStartService blocks until TProxyStopService() is called or error
             log("Tun2Socks has stopped.")
         } catch (e: Exception) {
             log("Tun2Socks Native Error: ${e.message}")
+            e.printStackTrace()
         } finally {
             log("VPN Loop Finished")
-            Tun2Socks.Stop()
+            TProxyService.TProxyStopService()
             try {
                 tunnel.close()
             } catch (e: Exception) {}
