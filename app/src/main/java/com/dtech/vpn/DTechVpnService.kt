@@ -193,7 +193,7 @@ class DTechVpnService : VpnService() {
 
         // We need the raw file descriptor as an Int for the native library
         // detachFd() returns the FD and closes the Java object, passing ownership to native.
-        val vpnFd = vpnInterface?.detachFd() ?: -1
+        val vpnFd = vpnInterface?.fd ?: -1
         if (vpnFd == -1) {
              tunnel?.close()
              return
@@ -203,26 +203,7 @@ class DTechVpnService : VpnService() {
         try {
             // Generate config file for Tun2Socks
             val configFile = File(cacheDir, "tproxy.conf")
-            val configContent = StringBuilder()
-
-            // Basic settings
-            configContent.append("misc:\n")
-            configContent.append("  task-stack-size: 24576\n")
-            configContent.append("tunnel:\n")
-            configContent.append("  name: tun0\n")
-            configContent.append("  mtu: 1050\n")
-            configContent.append("  multi-queue: false\n")
-            configContent.append("  ipv4: 10.0.0.2\n")
-            configContent.append("  ipv6: 'fc00::1'\n")
-
-            // SOCKS5 settings - pointing to our local SSH tunnel
-            configContent.append("socks5:\n")
-            configContent.append("  port: 10808\n")
-            configContent.append("  address: '127.0.0.1'\n")
-            configContent.append("  udp: 'tcp'\n") // Tunnel UDP over TCP
-
-            // Write config to file
-            FileOutputStream(configFile).use { it.write(configContent.toString().toByteArray()) }
+            createConfig(configFile, 10808)
 
             log("Generated Tun2Socks config at: ${configFile.absolutePath}")
 
@@ -243,6 +224,24 @@ class DTechVpnService : VpnService() {
                 tunnel.close()
             } catch (e: Exception) {}
         }
+    }
+
+    private fun createConfig(configFile: File, socksPort: Int) {
+        // CRITICAL: The 'udp: udp' line is mandatory for this library version.
+        val configContent = """
+            tunnel:
+              name: tun0
+              mtu: 1050
+              ipv4: 10.0.0.2
+              ipv6: fc00::2
+            socks5:
+              port: $socksPort
+              address: 127.0.0.1
+              udp: udp
+        """.trimIndent()
+
+        configFile.writeText(configContent)
+        log("Config Generated with UDP support.")
     }
 
     private fun log(message: String) {
