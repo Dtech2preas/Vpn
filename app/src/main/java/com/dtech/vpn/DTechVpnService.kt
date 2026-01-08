@@ -12,7 +12,9 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import hev.socks5.tunnel.Tun2Socks
+import hev.sockstun.Tun2Socks
+import java.io.File
+import java.io.FileWriter
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -199,21 +201,34 @@ class DTechVpnService : VpnService() {
 
         log("Starting Tun2Socks Native...")
         try {
+            // Create a temporary config file
+            val configFile = File(cacheDir, "tun2socks.yml")
+            val configContent = """
+                tunnel:
+                  mtu: 1050
+                  ipv4: 10.0.0.2
+                  ipv6: fc00::2
+                socks5:
+                  address: 127.0.0.1
+                  port: 10808
+            """.trimIndent()
+
+            FileWriter(configFile).use { writer ->
+                writer.write(configContent)
+            }
+
             // Start the native transparent proxy
             // vpnFd: The TUN interface
-            // proxyUrl: The local SOCKS5 server we just started in SSH
-            // netFd: 0 (Let the library protect the socket automatically or we handle it via SSH)
-            // dns: The user's custom DNS
-            // mtu: 1050 (Safe MTU)
-            Tun2Socks.Start(vpnFd, "socks5://127.0.0.1:10808", 0, dnsServer.ifEmpty { "1.1.1.1" }, 1050)
+            // configPath: The path to the config file
+            Tun2Socks.run(configFile.absolutePath, vpnFd)
 
-            // Tun2Socks.Start blocks until Tun2Socks.Stop() is called or error
+            // Tun2Socks.run blocks until Tun2Socks.stop() is called or error
             log("Tun2Socks has stopped.")
         } catch (e: Exception) {
             log("Tun2Socks Native Error: ${e.message}")
         } finally {
             log("VPN Loop Finished")
-            Tun2Socks.Stop()
+            Tun2Socks.stop()
             try {
                 tunnel.close()
             } catch (e: Exception) {}
