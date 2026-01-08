@@ -209,7 +209,11 @@ class DTechVpnService : VpnService() {
             configContent.append("misc:\n")
             configContent.append("  task-stack-size: 24576\n")
             configContent.append("tunnel:\n")
+            configContent.append("  name: tun0\n")
             configContent.append("  mtu: 1050\n")
+            configContent.append("  multi-queue: false\n")
+            configContent.append("  ipv4: 10.0.0.2\n")
+            configContent.append("  ipv6: 'fc00::1'\n")
 
             // SOCKS5 settings - pointing to our local SSH tunnel
             configContent.append("socks5:\n")
