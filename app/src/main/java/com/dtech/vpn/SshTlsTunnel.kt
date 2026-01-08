@@ -43,6 +43,7 @@ class SshTlsTunnel(
     private var wsOut: WebSocketOutputStream? = null
 
     fun connect() {
+        logger("Starting SSH Tunnel setup...")
         val jsch = JSch()
         session = jsch.getSession(user, host, port)
         session?.setPassword(pass)
@@ -108,6 +109,7 @@ class SshTlsTunnel(
         val plainSocket = Socket()
         try {
             plainSocket.connect(InetSocketAddress(host, port), 30000)
+            logger("Raw TCP connection established to $host:$port")
         } catch (e: Exception) {
              logger("TCP Connection failed: ${e.message}")
              throw e
@@ -132,12 +134,14 @@ class SshTlsTunnel(
                  if (currentSni == null || currentSni.isEmpty()) {
                      params.serverNames = listOf(javax.net.ssl.SNIHostName(sni))
                      socket.sslParameters = params
+                     logger("Applied SNI via SSLParameters: $sni")
                  }
             }
         }
 
         if (forceTls12) {
              socket.enabledProtocols = arrayOf("TLSv1.2")
+             logger("Forced TLS 1.2 protocol")
         }
 
         logger("Starting TLS Handshake with SNI: $peerHost")
@@ -192,6 +196,7 @@ class SshTlsTunnel(
                  // The callback now receives a boolean: true = Raw, false = WebSocket
                  wsIn = WebSocketInputStream(socket.inputStream, logger) { isRaw ->
                      // Callback: Protocol Detected
+                     logger("Protocol detection callback: Raw=$isRaw")
                      wsOutLocal.determineMode(isRaw)
                      if (isRaw) {
                         try { Thread.sleep(150) } catch (e: Exception) {}
@@ -248,6 +253,7 @@ class SshTlsTunnel(
     }
 
     fun close() {
+        logger("Closing SSH Tunnel resources...")
         socksProxy?.stopProxy()
         socksProxy = null
         try {

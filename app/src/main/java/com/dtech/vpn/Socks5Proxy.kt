@@ -19,6 +19,7 @@ class Socks5Proxy(
     private var serverSocket: ServerSocket? = null
 
     override fun run() {
+        logger("Starting Socks5Proxy thread on port $port")
         try {
             serverSocket = ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))
             logger("SOCKS5 Proxy listening on 127.0.0.1:$port")
@@ -26,6 +27,7 @@ class Socks5Proxy(
             while (running.get()) {
                 try {
                     val client = serverSocket?.accept() ?: break
+                    logger("Accepted SOCKS5 connection from ${client.inetAddress}")
                     Thread { handleClient(client) }.start()
                 } catch (e: Exception) {
                     if (running.get()) logger("Socks5 accept error: ${e.message}")
@@ -33,14 +35,19 @@ class Socks5Proxy(
             }
         } catch (e: Exception) {
             logger("Socks5 server error: ${e.message}")
+        } finally {
+            logger("Socks5Proxy thread exiting")
         }
     }
 
     fun stopProxy() {
+        logger("Stopping SOCKS5 Proxy...")
         running.set(false)
         try {
             serverSocket?.close()
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            logger("Error closing server socket: ${e.message}")
+        }
     }
 
     private fun handleClient(socket: Socket) {
@@ -51,7 +58,10 @@ class Socks5Proxy(
             // SOCKS5 Handshake
             // 1. Client greets
             val ver = input.read()
-            if (ver != 5) return // Not SOCKS5
+            if (ver != 5) {
+                logger("Invalid SOCKS version: $ver")
+                return
+            }
 
             val nmethods = input.read()
             val methods = ByteArray(nmethods)
@@ -85,7 +95,10 @@ class Socks5Proxy(
                     readFull(input, ip)
                     host = InetAddress.getByAddress(ip).hostAddress
                 }
-                else -> return // Unsupported
+                else -> {
+                    logger("Unsupported address type: $atyp")
+                    return
+                }
             }
 
             val b1 = input.read()
@@ -96,6 +109,7 @@ class Socks5Proxy(
             if (cmd == 1) { // Connect
                 handleConnect(socket, input, output, host, targetPort)
             } else {
+                logger("Unsupported SOCKS command: $cmd")
                 // Unsupported command
                 output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0)) // Command not supported
                 output.flush()
@@ -103,7 +117,7 @@ class Socks5Proxy(
             }
 
         } catch (e: Exception) {
-            // logger("Socks5 Client Error: ${e.message}")
+            logger("Socks5 Client Error: ${e.message}")
             try { socket.close() } catch (e2: Exception) {}
         }
     }
@@ -111,6 +125,7 @@ class Socks5Proxy(
     private fun handleConnect(clientSocket: Socket, clientIn: InputStream, clientOut: OutputStream, host: String, port: Int) {
         var channel: ChannelDirectTCPIP? = null
         try {
+            logger("Requesting direct-tcpip to $host:$port")
             channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
 
             // Reflection to invoke package-private setters
@@ -121,6 +136,7 @@ class Socks5Proxy(
 
             // Connect with timeout
             channel.connect(10000)
+            logger("direct-tcpip connected to $host:$port")
 
             // Reply Success
             clientOut.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
@@ -139,7 +155,7 @@ class Socks5Proxy(
             t2.join()
 
         } catch (e: Exception) {
-            // logger("Socks5 Connect Failed: ${e.message}")
+            logger("Socks5 Connect Failed: ${e.message}")
             try {
                  clientOut.write(byteArrayOf(0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0)) // Host unreachable
                  clientOut.flush()

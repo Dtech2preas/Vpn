@@ -193,8 +193,14 @@ class DTechVpnService : VpnService() {
 
         // We need the raw file descriptor as an Int for the native library
         // detachFd() returns the FD and closes the Java object, passing ownership to native.
-        val vpnFd = vpnInterface?.fd ?: -1
+        val vpnFd = vpnInterface?.detachFd() ?: -1
+        log("FD detached: $vpnFd")
+
+        // Immediately nullify the Java wrapper to prevent accidental usage or double close
+        vpnInterface = null
+
         if (vpnFd == -1) {
+             log("Error: Invalid File Descriptor.")
              tunnel?.close()
              return
         }
@@ -208,7 +214,7 @@ class DTechVpnService : VpnService() {
 
             createConfig(configFile, 10808, logFile)
 
-            log("Generated Tun2Socks config at: ${configFile.absolutePath}")
+            log("Generated Tun2Socks config at: ${configFile.absolutePath} (Size: ${configFile.length()} bytes)")
 
             // Start the native transparent proxy
             // fd: The TUN interface file descriptor
@@ -237,7 +243,7 @@ class DTechVpnService : VpnService() {
 
             TProxyService.TProxyStopService()
             try {
-                tunnel.close()
+                tunnel?.close()
             } catch (e: Exception) {}
         }
     }
@@ -260,6 +266,7 @@ class DTechVpnService : VpnService() {
         """.trimIndent()
 
         configFile.writeText(configContent)
+        configFile.setReadable(true, false) // Ensure native can read it
         log("Config Generated with UDP support.")
     }
 
