@@ -80,7 +80,7 @@ class SshTlsTunnel(
 
         // Enable Dynamic Port Forwarding (SOCKS5 Server)
         // This listens on localhost:10808 and forwards traffic through the SSH tunnel
-        session?.setPortForwardingD("127.0.0.1", 10808)
+        session?.setPortForwardingD(10808)
         logger("SOCKS5 Proxy enabled on 127.0.0.1:10808")
     }
 
@@ -246,9 +246,6 @@ class SshTlsTunnel(
 
     fun close() {
         // Stop dynamic port forwarding if needed, but session disconnect handles it.
-        try {
-            session?.delPortForwardingD(10808)
-        } catch (e: Exception) {}
         try {
             session?.disconnect()
         } catch (e: Exception) {}
