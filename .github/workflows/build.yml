@@ -24,6 +24,11 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
+    - name: Download LibXray AAR
+      run: |
+        mkdir -p app/libs
+        wget -O app/libs/libv2ray.aar https://github.com/2dust/AndroidLibXrayLite/releases/download/v25.12.8/libv2ray.aar
+
     - name: Build with Gradle
       run: ./gradlew assembleDebug
 
