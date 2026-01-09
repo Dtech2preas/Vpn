@@ -183,17 +183,18 @@ class MainActivity : AppCompatActivity() {
 
             val intent = Intent(this, DTechVpnService::class.java)
             intent.action = DTechVpnService.ACTION_CONNECT
-            intent.putExtra(DTechVpnService.EXTRA_HOST, host)
-            intent.putExtra(DTechVpnService.EXTRA_PORT, port)
-            intent.putExtra(DTechVpnService.EXTRA_SNI, sni)
-            intent.putExtra(DTechVpnService.EXTRA_ENABLE_CAMOUFLAGE, enableCamouflage)
-            intent.putExtra(DTechVpnService.EXTRA_PAYLOAD, payload)
-            intent.putExtra(DTechVpnService.EXTRA_USERNAME, username)
-            intent.putExtra(DTechVpnService.EXTRA_PASSWORD, password)
-            intent.putExtra(DTechVpnService.EXTRA_FORCE_TLS_12, forceTls12)
-            intent.putExtra(DTechVpnService.EXTRA_UDPGW_ENABLED, enableUdpGw)
-            intent.putExtra(DTechVpnService.EXTRA_UDPGW_PORT, udpGwPort)
-            intent.putExtra(DTechVpnService.EXTRA_DNS_SERVER, customDns.ifEmpty { "1.1.1.1" })
+            intent.putExtra("PROTOCOL", "SSH") // Default to SSH as requested
+            intent.putExtra("host", host)
+            intent.putExtra("port", port)
+            intent.putExtra("sni", sni)
+            intent.putExtra("enable_camouflage", enableCamouflage)
+            intent.putExtra("payload", payload)
+            intent.putExtra("username", username)
+            intent.putExtra("password", password)
+            intent.putExtra("force_tls12", forceTls12)
+            intent.putExtra("udpgw_enabled", enableUdpGw) // Kept for legacy compatibility if needed
+            intent.putExtra("udpgw_port", udpGwPort) // Kept for legacy compatibility if needed
+            intent.putExtra("dns_server", customDns.ifEmpty { "1.1.1.1" }) // Kept for legacy compatibility if needed
             startService(intent)
         }
     }
