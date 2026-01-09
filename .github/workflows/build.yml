@@ -24,24 +24,58 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Download and Extract Tun2Socks Libs
+    - name: Download and Extract Tun2Socks Libs (SagerNet)
       run: |
         # Create directories
         mkdir -p app/src/main/jniLibs/arm64-v8a/
         mkdir -p app/src/main/jniLibs/armeabi-v7a/
 
-        # Download APK
-        wget -O temp_vpn.apk https://github.com/heiher/sockstun/releases/download/6.0/hev.sockstun-6.0-release.apk
+        # --- ARM64-V8A ---
+        echo "Processing ARM64..."
+        wget -O temp_vpn_arm64.apk https://github.com/SagerNet/SagerNet/releases/download/0.8.1-rc03/SN-0.8.1-rc03-arm64-v8a.apk
 
-        # Extract using the ACTUAL internal filename (libhev-socks5-tunnel.so)
-        # We pipe it (>) to libtun2socks.so so your code finds the right name.
-        unzip -p temp_vpn.apk lib/arm64-v8a/libhev-socks5-tunnel.so > app/src/main/jniLibs/arm64-v8a/libtun2socks.so
-        unzip -p temp_vpn.apk lib/armeabi-v7a/libhev-socks5-tunnel.so > app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+        # Try explicit extraction
+        if ! unzip -p temp_vpn_arm64.apk lib/arm64-v8a/libtun2socks.so > app/src/main/jniLibs/arm64-v8a/libtun2socks.so; then
+            echo "Direct extraction failed for ARM64. Searching..."
+            # Fallback: Extract all .so and find the largest
+            mkdir -p temp_libs_arm64
+            unzip -j temp_vpn_arm64.apk "lib/arm64-v8a/*.so" -d temp_libs_arm64/
+            LARGEST_LIB=$(ls -S temp_libs_arm64/*.so | head -n 1)
+            if [ -n "$LARGEST_LIB" ]; then
+                cp "$LARGEST_LIB" app/src/main/jniLibs/arm64-v8a/libtun2socks.so
+                echo "Renamed $LARGEST_LIB to libtun2socks.so (ARM64)"
+            else
+                echo "No shared libraries found in ARM64 APK!"
+                exit 1
+            fi
+            rm -rf temp_libs_arm64
+        fi
+
+        # --- ARMEABI-V7A ---
+        echo "Processing ARMEABI-V7A..."
+        wget -O temp_vpn_arm7.apk https://github.com/SagerNet/SagerNet/releases/download/0.8.1-rc03/SN-0.8.1-rc03-armeabi-v7a.apk
+
+        # Try explicit extraction
+        if ! unzip -p temp_vpn_arm7.apk lib/armeabi-v7a/libtun2socks.so > app/src/main/jniLibs/armeabi-v7a/libtun2socks.so; then
+            echo "Direct extraction failed for ARM7. Searching..."
+            # Fallback
+            mkdir -p temp_libs_arm7
+            unzip -j temp_vpn_arm7.apk "lib/armeabi-v7a/*.so" -d temp_libs_arm7/
+            LARGEST_LIB=$(ls -S temp_libs_arm7/*.so | head -n 1)
+            if [ -n "$LARGEST_LIB" ]; then
+                cp "$LARGEST_LIB" app/src/main/jniLibs/armeabi-v7a/libtun2socks.so
+                echo "Renamed $LARGEST_LIB to libtun2socks.so (ARM7)"
+            else
+                echo "No shared libraries found in ARM7 APK!"
+                exit 1
+            fi
+            rm -rf temp_libs_arm7
+        fi
 
         # Cleanup
-        rm temp_vpn.apk
+        rm temp_vpn_arm64.apk temp_vpn_arm7.apk
 
-        # Verify (This should show libtun2socks.so in both folders)
+        # Verify
         ls -R app/src/main/jniLibs/
 
     - name: Inspect Strings for JNI Class
@@ -50,12 +84,8 @@ jobs:
         # Install binutils (if needed)
         sudo apt-get update && sudo apt-get install -y binutils
 
-        # Dump strings and look for the package path (e.g., hev/sockstun)
-        # We accept exit code 1 in grep to prevent build failure if empty
-        strings app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep "hev/" || true
-        
-        echo "=== CHECKING FOR CONFIG KEYWORDS ==="
-        strings app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep -E "config|proxy|socks" || true
+        # Dump strings and look for the package path
+        strings app/src/main/jniLibs/arm64-v8a/libtun2socks.so | grep "sagernet" || true
         
         echo "=== END DUMP ==="
 
