@@ -36,4 +36,5 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("com.github.mwiede:jsch:0.2.20")
+    implementation("io.netty:netty-all:4.1.100.Final")
 }
