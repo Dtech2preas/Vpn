@@ -98,7 +98,7 @@ class NettySocks5Server(
                 Socks5CommandType.CONNECT -> handleConnect(ctx, msg)
                 Socks5CommandType.UDP_ASSOCIATE -> handleUdpAssociate(ctx, msg)
                 else -> {
-                    ctx.writeAndFlush(DefaultSocks5CommandResponse(Socks5CommandStatus.COMMAND_NOT_SUPPORTED, msg.dstAddrType()))
+                    ctx.writeAndFlush(DefaultSocks5CommandResponse(Socks5CommandStatus.COMMAND_UNSUPPORTED, msg.dstAddrType()))
                     ctx.close()
                 }
             }
@@ -118,15 +118,15 @@ class NettySocks5Server(
                         return@Thread
                     }
 
+                    // Inside the CONNECT handling logic...
                     channel = session.openChannel("direct-tcpip") as ChannelDirectTCPIP
+                    channel.setHost(dstAddr)
+                    channel.setPort(dstPort)
+                    channel.connect(5000)
 
-                    // Reflection for JSch
-                    invokePrivateSetter(channel, "setHost", String::class.java, dstAddr)
-                    invokePrivateSetter(channel, "setPort", Int::class.javaPrimitiveType!!, dstPort)
-                    invokePrivateSetter(channel, "setOrgIPAddress", String::class.java, "127.0.0.1")
-                    invokePrivateSetter(channel, "setOrgPort", Int::class.javaPrimitiveType!!, 0)
-
-                    channel.connect(10000) // Blocking Connect (10s timeout)
+                    // FIX: Define the streams explicitly
+                    val sshIn = channel.inputStream
+                    val sshOut = channel.outputStream
 
                     // Reply Success on the Context (Netty Thread)
                     ctx.executor().execute {
@@ -136,10 +136,6 @@ class NettySocks5Server(
                             dstAddr,
                             dstPort
                         ))
-
-                        // Bridge Setup
-                        val sshIn = channel!!.inputStream
-                        val sshOut = channel!!.outputStream
 
                         // Netty Inbound -> SSH Outbound (Blocking Write)
                         // Remove SOCKS decoders
