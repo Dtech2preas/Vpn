@@ -220,9 +220,13 @@ class DTechVpnService : VpnService() {
 
                 // Create Controller
                 v2rayController = libv2ray.Libv2ray.newCoreController(object : libv2ray.CoreCallbackHandler {
-                    override fun onEmit(msg: String?) {
+                    override fun onEmitStatus(status: Long, msg: String?): Long {
                         if (msg != null) log("Xray: $msg")
+                        return 0
                     }
+
+                    override fun startup(): Long { return 0 }
+                    override fun shutdown(): Long { return 0 }
                 })
 
                 // Start Loop
