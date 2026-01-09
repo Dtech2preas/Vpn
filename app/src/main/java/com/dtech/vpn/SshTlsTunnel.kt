@@ -36,7 +36,7 @@ class SshTlsTunnel(
 ) {
 
     private var session: Session? = null
-    private var socksProxy: Socks5Proxy? = null
+    private var socksProxy: NettySocks5Server? = null
     private var sslSocket: SSLSocket? = null
     private var isWebSocket = false
     private var wsIn: WebSocketInputStream? = null
@@ -82,7 +82,7 @@ class SshTlsTunnel(
 
         // Enable Dynamic Port Forwarding (SOCKS5 Server)
         // This listens on localhost:10808 and forwards traffic through the SSH tunnel
-        socksProxy = Socks5Proxy(session!!, 10808, logger)
+        socksProxy = NettySocks5Server(session!!, 10808, logger)
         socksProxy?.start()
         logger("SOCKS5 Proxy enabled on 127.0.0.1:10808")
     }
@@ -248,7 +248,7 @@ class SshTlsTunnel(
     }
 
     fun close() {
-        socksProxy?.stopProxy()
+        socksProxy?.stop()
         socksProxy = null
         try {
             session?.disconnect()
