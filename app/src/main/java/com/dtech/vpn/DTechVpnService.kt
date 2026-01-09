@@ -107,9 +107,8 @@ class DTechVpnService : VpnService() {
 
         vpnThread = Thread {
             var attempt = 0
-            var connected = false
 
-            while (attempt < MAX_RETRIES && !connected && isRunning.get()) {
+            while (attempt < MAX_RETRIES && isRunning.get()) {
                 attempt++
                 if (attempt > 1) {
                     log("Retrying connection... (Attempt $attempt/$MAX_RETRIES)")
@@ -122,7 +121,10 @@ class DTechVpnService : VpnService() {
 
                 try {
                     runVpnLoop(host, port, sni, payload, enableCamouflage, user, pass, forceTls12, udpgwEnabled, udpgwPort, dnsServer)
-                    connected = true
+                    // If runVpnLoop returns, it means Tun2Socks stopped.
+                    if (isRunning.get()) {
+                         log("VPN disconnected unexpectedly.")
+                    }
                 } catch (e: Exception) {
                     log("Connection failed: ${e.message}")
                     e.printStackTrace()
@@ -131,6 +133,7 @@ class DTechVpnService : VpnService() {
 
             // If we exited the loop and are not running, we are done.
             if (isRunning.get()) {
+                log("Max retries reached or connection failed.")
                 stopVpn()
             }
         }
@@ -260,6 +263,8 @@ class DTechVpnService : VpnService() {
         """.trimIndent()
 
         configFile.writeText(configContent)
+        // Ensure the config file is readable by the native process
+        configFile.setReadable(true, false)
         log("Config Generated with UDP support.")
     }
 
