@@ -11,7 +11,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import libxray.LibXray
+import libv2ray.Libv2ray
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -222,7 +222,7 @@ class DTechVpnService : VpnService() {
                 // Thread { LibXray.startXray(config) }.start()
                 // So we are already in a thread (vpnThread).
 
-                LibXray.startXray(fullConfig)
+                Libv2ray.startLoop(fullConfig)
 
                 // If startXray returns immediately (non-blocking), we need to keep this thread alive or monitor status.
                 // If it blocks, then we are good.
@@ -249,7 +249,7 @@ class DTechVpnService : VpnService() {
     private fun stopVpn() {
         log("Stopping VPN...")
         try {
-            LibXray.stopXray()
+            Libv2ray.stopLoop()
         } catch (e: Exception) {
             log("Error stopping Xray: ${e.message}")
         }
