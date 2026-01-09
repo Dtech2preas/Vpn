@@ -36,6 +36,7 @@ class DTechVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var sshTunnel: SshTlsTunnel? = null
     private var vpnThread: Thread? = null
+    private var v2rayController: libv2ray.CoreController? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -213,22 +214,19 @@ class DTechVpnService : VpnService() {
                 """
 
                 log("Starting Xray Core...")
-                // 4. Launch Xray
-                // Note: startXray is blocking or starts a background process?
-                // The library usually starts it in a way that we need to keep the process alive or it handles it.
-                // Looking at typical GoMobile wrappers, we might need to be careful.
-                // LibXray.startXray usually blocks or runs until stopped.
-                // However, the prompt sample showed:
-                // Thread { LibXray.startXray(config) }.start()
-                // So we are already in a thread (vpnThread).
 
-                Libv2ray.startLoop(fullConfig)
+                // Initialize Environment
+                libv2ray.Libv2ray.initCoreEnv(filesDir.absolutePath, "assets")
 
-                // If startXray returns immediately (non-blocking), we need to keep this thread alive or monitor status.
-                // If it blocks, then we are good.
-                // Assuming it might return if it fails or if it's designed to run in background (less likely for GoMobile functions usually).
-                // But let's assume it blocks as per typical GoMobile behavior for "Start" functions unless they say "StartAsync".
-                // If it returns, we check if we should still be running.
+                // Create Controller
+                v2rayController = libv2ray.Libv2ray.newCoreController(object : libv2ray.CoreCallbackHandler {
+                    override fun onEmit(msg: String?) {
+                        if (msg != null) log("Xray: $msg")
+                    }
+                })
+
+                // Start Loop
+                v2rayController?.startLoop(fullConfig)
 
                 log("Xray Core exited.")
                 if (vpnInterface != null) {
@@ -249,7 +247,7 @@ class DTechVpnService : VpnService() {
     private fun stopVpn() {
         log("Stopping VPN...")
         try {
-            Libv2ray.stopLoop()
+            v2rayController?.stopLoop()
         } catch (e: Exception) {
             log("Error stopping Xray: ${e.message}")
         }
