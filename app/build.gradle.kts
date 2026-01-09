@@ -30,9 +30,12 @@ android {
     }
 
     packaging {
+        jniLibs {
+            pickFirsts += "lib/arm64-v8a/libxray.so"
+            pickFirsts += "lib/armeabi-v7a/libxray.so"
+        }
         resources {
             excludes += "META-INF/INDEX.LIST"
-            excludes += "META-INF/io.netty.versions.properties"
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/LICENSE"
             excludes += "META-INF/NOTICE"
@@ -43,7 +46,7 @@ android {
 }
 
 dependencies {
-    implementation("io.netty:netty-all:4.1.100.Final")
+    implementation("com.github.2dust:AndroidLibXrayLite:v25.12.8")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
