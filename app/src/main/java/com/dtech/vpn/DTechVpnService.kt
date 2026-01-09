@@ -210,6 +210,13 @@ class DTechVpnService : VpnService() {
 
             log("Generated Tun2Socks config at: ${configFile.absolutePath}")
 
+            // Wait for Netty SOCKS5 Server to be ready
+            if (!waitForLocalPort(10808)) {
+                log("Aborting: SOCKS5 Server did not start in time.")
+                tunnel?.close()
+                return
+            }
+
             // Start the native transparent proxy
             // fd: The TUN interface file descriptor
             // config_path: Path to the configuration file
@@ -240,6 +247,26 @@ class DTechVpnService : VpnService() {
                 tunnel.close()
             } catch (e: Exception) {}
         }
+    }
+
+    private fun waitForLocalPort(port: Int): Boolean {
+        val maxRetries = 20 // Wait 10 seconds (20 * 500ms)
+        log("Waiting for SOCKS server on port $port...")
+
+        for (i in 0 until maxRetries) {
+            try {
+                // Try to connect to the port
+                val socket = java.net.Socket("127.0.0.1", port)
+                socket.close()
+                log("Success: SOCKS Server is LISTENING on $port")
+                return true
+            } catch (e: Exception) {
+                // Port is closed, wait and retry
+                try { Thread.sleep(500) } catch (ignore: Exception) {}
+            }
+        }
+        log("ERROR: Timed out waiting for SOCKS server.")
+        return false
     }
 
     private fun createConfig(configFile: File, socksPort: Int, logFile: File) {
