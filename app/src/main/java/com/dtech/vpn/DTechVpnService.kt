@@ -12,6 +12,8 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import libv2ray.Libv2ray
+import libv2ray.CoreController
+import libv2ray.CoreCallbackHandler
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -36,6 +38,7 @@ class DTechVpnService : VpnService() {
     private var vpnInterface: ParcelFileDescriptor? = null
     private var sshTunnel: SshTlsTunnel? = null
     private var vpnThread: Thread? = null
+    private var v2rayController: CoreController? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -214,21 +217,22 @@ class DTechVpnService : VpnService() {
 
                 log("Starting Xray Core...")
                 // 4. Launch Xray
-                // Note: startXray is blocking or starts a background process?
-                // The library usually starts it in a way that we need to keep the process alive or it handles it.
-                // Looking at typical GoMobile wrappers, we might need to be careful.
-                // LibXray.startXray usually blocks or runs until stopped.
-                // However, the prompt sample showed:
-                // Thread { LibXray.startXray(config) }.start()
-                // So we are already in a thread (vpnThread).
-
-                Libv2ray.startLoop(fullConfig)
-
-                // If startXray returns immediately (non-blocking), we need to keep this thread alive or monitor status.
-                // If it blocks, then we are good.
-                // Assuming it might return if it fails or if it's designed to run in background (less likely for GoMobile functions usually).
-                // But let's assume it blocks as per typical GoMobile behavior for "Start" functions unless they say "StartAsync".
-                // If it returns, we check if we should still be running.
+                Libv2ray.initCoreEnv(filesDir.absolutePath)
+                v2rayController = Libv2ray.newCoreController(object : CoreCallbackHandler {
+                     override fun onEmitStatus(severity: Long, message: String?): Long {
+                         log("V2Ray [$severity]: $message")
+                         return 0
+                     }
+                     override fun startup(): Long {
+                         log("V2Ray Starting...")
+                         return 0
+                     }
+                     override fun shutdown(): Long {
+                         log("V2Ray Shutting down...")
+                         return 0
+                     }
+                })
+                v2rayController?.startLoop(fullConfig)
 
                 log("Xray Core exited.")
                 if (vpnInterface != null) {
@@ -249,7 +253,7 @@ class DTechVpnService : VpnService() {
     private fun stopVpn() {
         log("Stopping VPN...")
         try {
-            Libv2ray.stopLoop()
+            v2rayController?.stopLoop()
         } catch (e: Exception) {
             log("Error stopping Xray: ${e.message}")
         }
