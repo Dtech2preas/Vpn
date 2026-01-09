@@ -12,7 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import hev.sockstun.TProxyService
+import io.github.sagernet.sagernet.bg.Tun2Socks
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -204,68 +204,20 @@ class DTechVpnService : VpnService() {
 
         log("Starting Tun2Socks Native...")
         try {
-            // Generate config file for Tun2Socks
-            val configFile = File(cacheDir, "tproxy.conf")
-            val logFile = File(cacheDir, "tun2socks.log")
-            if (logFile.exists()) logFile.delete()
-
-            createConfig(configFile, 10808, logFile)
-
-            log("Generated Tun2Socks config at: ${configFile.absolutePath}")
-
             // Start the native transparent proxy
-            // fd: The TUN interface file descriptor
-            // config_path: Path to the configuration file
-            TProxyService.TProxyStartService(configFile.absolutePath, vpnFd)
+            // Blocks until Tun2Socks stops or error
+            Tun2Socks.Start(vpnFd, 1050, "127.0.0.1", "10808", dnsServer)
 
-            // TProxyStartService blocks until TProxyStopService() is called or error
             log("Tun2Socks has stopped.")
         } catch (e: Exception) {
             log("Tun2Socks Native Error: ${e.message}")
             e.printStackTrace()
         } finally {
             log("VPN Loop Finished")
-
-            // Read and print native logs
-            val logFile = File(cacheDir, "tun2socks.log")
-            if (logFile.exists()) {
-                try {
-                    log("--- Tun2Socks Native Logs ---")
-                    logFile.useLines { lines -> lines.forEach { log(it) } }
-                    log("--- End Native Logs ---")
-                } catch (e: Exception) {
-                    log("Failed to read native logs: ${e.message}")
-                }
-            }
-
-            TProxyService.TProxyStopService()
             try {
                 tunnel.close()
             } catch (e: Exception) {}
         }
-    }
-
-    private fun createConfig(configFile: File, socksPort: Int, logFile: File) {
-        // CRITICAL: The 'udp: udp' line is mandatory for this library version.
-        val configContent = """
-            tunnel:
-              name: tun0
-              mtu: 1050
-              ipv4: 10.0.0.2
-              ipv6: fc00::2
-            socks5:
-              port: $socksPort
-              address: 127.0.0.1
-              udp: udp
-            misc:
-              log-level: debug
-              log-file: ${logFile.absolutePath}
-        """.trimIndent()
-
-        configFile.writeText(configContent)
-        // Ensure the config file is readable by the native process
-        configFile.setReadable(true, false)
-        log("Config Generated with UDP support.")
     }
 
     private fun log(message: String) {
